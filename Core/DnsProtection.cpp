@@ -561,4 +561,5 @@ DnsProtectionResult run(const wchar_t* mode){
 DnsProtectionResult DnsProtection::enable(){return run(L"Enable");}
 DnsProtectionResult DnsProtection::synchronize(){return run(L"Sync");}
 DnsProtectionResult DnsProtection::restore(){return run(L"Restore");}
+DnsProtectionResult DnsProtection::removeSocialPlatformBlocks(){return run(L"RemoveSocialBlocks");}
 }
