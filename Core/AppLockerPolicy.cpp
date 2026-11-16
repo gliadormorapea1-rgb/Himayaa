@@ -279,7 +279,8 @@ try {
         if ($requested.Count -gt 0 -and $hasExternalPolicy -and
             ($exe.GetAttribute('EnforcementMode') -eq 'AuditOnly' -or
              ($null -ne $effectiveExe -and $effectiveExe.GetAttribute('EnforcementMode') -eq 'AuditOnly'))) {
-            throw 'An existing effective AppLocker EXE policy is set to Audit only. Himaya will not change another policy owner''s enforcement mode.'
+)PS",
+LR"PS(            throw 'An existing effective AppLocker EXE policy is set to Audit only. Himaya will not change another policy owner''s enforcement mode.'
         }
         if ($requested.Count -gt 0 -and -not $hasExternalPolicy) {
             $allow = $doc.CreateElement('FilePathRule')
@@ -333,7 +334,8 @@ try {
             $appliedEvent = Get-WinEvent -FilterHashtable @{
                 LogName='Microsoft-Windows-AppLocker/EXE and DLL'
                 Id=8001
-                StartTime=$converterStartTime
+)PS",
+LR"PS(                StartTime=$converterStartTime
             } -MaxEvents 1 -ErrorAction SilentlyContinue
         } while (($converter.State -eq 'Running' -or $null -eq $appliedEvent) -and (Get-Date) -lt $deadline)
         if ($converter.State -eq 'Running' -or $null -eq $appliedEvent) {
