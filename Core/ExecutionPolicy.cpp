@@ -1,6 +1,8 @@
 #include "ExecutionPolicy.h"
 #include "ConfigStore.h"
 #include <windows.h>
+#include <aclapi.h>
+#include <sddl.h>
 #include <algorithm>
 #include <cwctype>
 #include <cwchar>
@@ -13,6 +15,7 @@ namespace himaya {
 namespace {
 constexpr wchar_t kBase[] = L"SOFTWARE\\Policies\\Microsoft\\Windows\\Safer\\CodeIdentifiers";
 constexpr wchar_t kPaths[] = L"SOFTWARE\\Policies\\Microsoft\\Windows\\Safer\\CodeIdentifiers\\0\\Paths";
+constexpr wchar_t kFolderBackupRoot[] = L"SOFTWARE\\Himaya\\Security\\FolderAccessBackups";
 struct Rule { std::wstring path; std::wstring description; };
 std::wstring lower(std::wstring s) {
     std::transform(s.begin(),s.end(),s.begin(),[](wchar_t c){return static_cast<wchar_t>(towlower(c));});
@@ -50,6 +53,11 @@ bool protectedFolder(const std::wstring& path) {
     const std::wstring roots[]={windows,system,programData,programFiles,programFilesX86};
     for(const auto& r:roots) if(!r.empty() && within(path,r)) return true;
     if(path.size()==3 && path[1]==L':' && (path[2]==L'\\'||path[2]==L'/')) return true;
+    const auto userMarker=lower(path).find(L"\\users\\");
+    if(userMarker!=std::wstring::npos) {
+        const auto remainder=path.substr(userMarker+7);
+        if(!remainder.empty() && remainder.find_first_of(L"\\/")==std::wstring::npos) return true;
+    }
     return false;
 }
 std::wstring ruleId(const std::wstring& path) {
@@ -111,10 +119,129 @@ bool addRule(const Rule& rule) {
                   setDword(child,L"SaferFlags",0);
     RegCloseKey(child); return ok;
 }
+bool getOriginalSddl(const std::wstring& path,std::wstring& sddl) {
+    PSECURITY_DESCRIPTOR descriptor=nullptr;
+    const DWORD rc=GetNamedSecurityInfoW(const_cast<LPWSTR>(path.c_str()),SE_FILE_OBJECT,
+        OWNER_SECURITY_INFORMATION|GROUP_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,
+        nullptr,nullptr,nullptr,nullptr,&descriptor);
+    if(rc!=ERROR_SUCCESS) return false;
+    LPWSTR raw=nullptr;
+    const BOOL converted=ConvertSecurityDescriptorToStringSecurityDescriptorW(descriptor,
+        SDDL_REVISION_1,OWNER_SECURITY_INFORMATION|GROUP_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,
+        &raw,nullptr);
+    LocalFree(descriptor);
+    if(!converted) return false;
+    sddl=raw; LocalFree(raw); return true;
+}
+bool readBackup(const std::wstring& id,std::wstring& path,std::wstring& sddl) {
+    HKEY root=nullptr,child=nullptr;
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,kFolderBackupRoot,0,KEY_READ|KEY_WOW64_64KEY,&root)!=ERROR_SUCCESS) return false;
+    if(RegOpenKeyExW(root,id.c_str(),0,KEY_READ|KEY_WOW64_64KEY,&child)!=ERROR_SUCCESS){RegCloseKey(root);return false;}
+    auto read=[&](const wchar_t* name,std::wstring& out){
+        DWORD type=0,bytes=0;
+        if(RegQueryValueExW(child,name,nullptr,&type,nullptr,&bytes)!=ERROR_SUCCESS || type!=REG_SZ || bytes<sizeof(wchar_t)) return false;
+        out.resize(bytes/sizeof(wchar_t));
+        if(RegQueryValueExW(child,name,nullptr,&type,reinterpret_cast<BYTE*>(out.data()),&bytes)!=ERROR_SUCCESS) return false;
+        if(!out.empty() && out.back()==L'\\0') out.pop_back();
+        return true;
+    };
+    const bool ok=read(L"Path",path)&&read(L"OriginalSddl",sddl);
+    RegCloseKey(child);RegCloseKey(root);return ok;
+}
+bool saveBackup(const std::wstring& id,const std::wstring& path) {
+    HKEY root=nullptr,child=nullptr;
+    if(RegCreateKeyExW(HKEY_LOCAL_MACHINE,kFolderBackupRoot,0,nullptr,0,
+       KEY_CREATE_SUB_KEY|KEY_WOW64_64KEY,nullptr,&root,nullptr)!=ERROR_SUCCESS) return false;
+    if(RegCreateKeyExW(root,id.c_str(),0,nullptr,0,KEY_QUERY_VALUE|KEY_SET_VALUE|KEY_WOW64_64KEY,
+       nullptr,&child,nullptr)!=ERROR_SUCCESS){RegCloseKey(root);return false;}
+    DWORD type=0,bytes=0;
+    if(RegQueryValueExW(child,L"OriginalSddl",nullptr,&type,nullptr,&bytes)==ERROR_SUCCESS) {
+        std::wstring oldPath,oldSddl;
+        const bool ok=readBackup(id,oldPath,oldSddl) && _wcsicmp(oldPath.c_str(),path.c_str())==0;
+        RegCloseKey(child);RegCloseKey(root);return ok;
+    }
+    std::wstring sddl;
+    const bool got=getOriginalSddl(path,sddl);
+    const bool ok=got && setString(child,L"Path",path) && setString(child,L"OriginalSddl",sddl);
+    RegCloseKey(child);RegCloseKey(root);return ok;
+}
+bool usersDenyAcePresent(PACL dacl,PSID usersSid) {
+    if(!dacl) return false;
+    ACL_SIZE_INFORMATION info{};
+    if(!GetAclInformation(dacl,&info,sizeof(info),AclSizeInformation)) return false;
+    for(DWORD i=0;i<info.AceCount;++i) {
+        LPVOID raw=nullptr;
+        if(!GetAce(dacl,i,&raw)) continue;
+        auto* header=static_cast<ACE_HEADER*>(raw);
+        if(header->AceType!=ACCESS_DENIED_ACE_TYPE) continue;
+        auto* ace=static_cast<ACCESS_DENIED_ACE*>(raw);
+        if((ace->Mask&FILE_ALL_ACCESS)==FILE_ALL_ACCESS && EqualSid(&ace->SidStart,usersSid)) return true;
+    }
+    return false;
+}
+bool applyFolderAccessDeny(const std::wstring& path) {
+    const auto id=ruleId(path);
+    if(!saveBackup(id,path)) return false;
+    PSID owner=nullptr,group=nullptr;PACL oldDacl=nullptr;PSECURITY_DESCRIPTOR descriptor=nullptr;
+    const DWORD query=GetNamedSecurityInfoW(const_cast<LPWSTR>(path.c_str()),SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION,nullptr,nullptr,&oldDacl,nullptr,&descriptor);
+    if(query!=ERROR_SUCCESS) return false;
+    BYTE usersBuffer[SECURITY_MAX_SID_SIZE]{};DWORD usersSize=sizeof(usersBuffer);
+    if(!CreateWellKnownSid(WinBuiltinUsersSid,nullptr,usersBuffer,&usersSize)){LocalFree(descriptor);return false;}
+    if(usersDenyAcePresent(oldDacl,usersBuffer)){LocalFree(descriptor);return true;}
+    EXPLICIT_ACCESSW deny{};deny.grfAccessPermissions=FILE_ALL_ACCESS;deny.grfAccessMode=DENY_ACCESS;
+    deny.grfInheritance=SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+    BuildTrusteeWithSidW(&deny.Trustee,usersBuffer);
+    PACL newDacl=nullptr;
+    const DWORD build=SetEntriesInAclW(1,&deny,oldDacl,&newDacl);
+    LocalFree(descriptor);
+    if(build!=ERROR_SUCCESS) return false;
+    const DWORD set=SetNamedSecurityInfoW(const_cast<LPWSTR>(path.c_str()),SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION,nullptr,nullptr,newDacl,nullptr);
+    LocalFree(newDacl);
+    return set==ERROR_SUCCESS;
+}
+bool restoreFolderAccess(const std::wstring& id,const std::wstring& path,const std::wstring& sddl) {
+    if(exists(path)) {
+        PSECURITY_DESCRIPTOR descriptor=nullptr;
+        if(!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(),SDDL_REVISION_1,&descriptor,nullptr)) return false;
+        const BOOL ok=SetFileSecurityW(path.c_str(),
+            OWNER_SECURITY_INFORMATION|GROUP_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,descriptor);
+        LocalFree(descriptor);
+        if(!ok) return false;
+    }
+    HKEY root=nullptr;
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,kFolderBackupRoot,0,KEY_WRITE|KEY_WOW64_64KEY,&root)==ERROR_SUCCESS) {
+        RegDeleteTreeW(root,id.c_str());RegCloseKey(root);
+    }
+    return true;
+}
+bool synchronizeFolderAccess(const std::vector<std::wstring>& folders) {
+    std::vector<std::wstring> activeIds;
+    for(const auto& path:folders) {
+        const auto id=ruleId(path);activeIds.push_back(id);
+        if(!applyFolderAccessDeny(path)) return false;
+    }
+    HKEY root=nullptr;
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,kFolderBackupRoot,0,KEY_ENUMERATE_SUB_KEYS|KEY_READ|KEY_WRITE|KEY_WOW64_64KEY,&root)!=ERROR_SUCCESS) return true;
+    for(DWORD index=0;;) {
+        wchar_t idBuffer[256]{};DWORD n=static_cast<DWORD>(std::size(idBuffer));
+        const LONG rc=RegEnumKeyExW(root,index,idBuffer,&n,nullptr,nullptr,nullptr,nullptr);
+        if(rc==ERROR_NO_MORE_ITEMS) break;
+        if(rc!=ERROR_SUCCESS){RegCloseKey(root);return false;}
+        const std::wstring id(idBuffer,n);
+        if(std::find(activeIds.begin(),activeIds.end(),id)!=activeIds.end()){++index;continue;}
+        std::wstring path,sddl;
+        if(!readBackup(id,path,sddl)){RegCloseKey(root);return false;}
+        if(!restoreFolderAccess(id,path,sddl)){RegCloseKey(root);return false;}
+    }
+    RegCloseKey(root);return true;
+}
 }
 PolicySyncResult ExecutionPolicy::synchronize(ConfigStore& store) {
     if(!store.isReady()) return {false,0,L"قاعدة بيانات Himaya غير متاحة للخدمة."};
     std::vector<Rule> rules;
+    std::vector<std::wstring> folders;
     for(const auto& e:store.load(L"applications")) {
         auto p=fullPath(e.value);
         if(!p.empty() && exists(p) && !isDirectory(p))
@@ -122,17 +249,23 @@ PolicySyncResult ExecutionPolicy::synchronize(ConfigStore& store) {
     }
     for(const auto& e:store.load(L"paths")) {
         auto p=fullPath(e.value);
-        if(!p.empty() && isDirectory(p) && !protectedFolder(p))
+        if(!p.empty() && isDirectory(p) && !protectedFolder(p)) {
+            folders.push_back(p);
             rules.push_back({p+L"\\*",L"folder-execution"});
+        }
     }
     std::sort(rules.begin(),rules.end(),[](const Rule&a,const Rule&b){return a.path<b.path;});
     rules.erase(std::unique(rules.begin(),rules.end(),[](const Rule&a,const Rule&b){return lower(a.path)==lower(b.path);}),rules.end());
     static std::wstring last;
     const auto current=fingerprint(rules);
-    if(current==last) return {true,rules.size(),L"سياسات التشغيل محدثة."};
+    if(current==last) {
+        if(!synchronizeFolderAccess(folders)) return {false,0,L"تعذر تطبيق أو استعادة صلاحيات الوصول للمجلدات."};
+        return {true,rules.size(),L"سياسات التشغيل والوصول محدثة."};
+    }
     if(!configureSrp()) return {false,0,L"تعذر تهيئة سياسات Windows Software Restriction Policies."};
     if(!removeManagedRules()) return {false,0,L"تعذر إزالة قواعد Himaya القديمة بأمان."};
     for(const auto& rule:rules) if(!addRule(rule)) return {false,0,L"تعذر تسجيل إحدى قواعد منع التشغيل في Windows."};
+    if(!synchronizeFolderAccess(folders)) return {false,0,L"تعذر تطبيق أو استعادة صلاحيات الوصول للمجلدات."};
     last=current;
     DWORD_PTR ignored=0;
     SendMessageTimeoutW(HWND_BROADCAST,WM_SETTINGCHANGE,0,reinterpret_cast<LPARAM>(L"Software\\Policies\\Microsoft\\Windows\\Safer\\CodeIdentifiers"),SMTO_ABORTIFHUNG,2000,&ignored);
