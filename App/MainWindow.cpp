@@ -227,8 +227,16 @@ void MainWindow::setPage(int page) {
         L"An overview calculated from the data currently stored by Himaya.",
         L"Customize the appearance of the Himaya interface."
     };
-    if(pageTitle_) SetWindowTextW(pageTitle_,titles[currentPage_]);
-    if(pageSubtitle_) SetWindowTextW(pageSubtitle_,subtitles[currentPage_]);
+    if(pageTitle_) {
+        ShowWindow(pageTitle_,SW_HIDE);
+        SetWindowTextW(pageTitle_,titles[currentPage_]);
+        if(!AnimateWindow(pageTitle_,110,AW_SLIDE|AW_VER_POSITIVE)) ShowWindow(pageTitle_,SW_SHOW);
+    }
+    if(pageSubtitle_) {
+        ShowWindow(pageSubtitle_,SW_HIDE);
+        SetWindowTextW(pageSubtitle_,subtitles[currentPage_]);
+        if(!AnimateWindow(pageSubtitle_,130,AW_SLIDE|AW_VER_POSITIVE)) ShowWindow(pageSubtitle_,SW_SHOW);
+    }
     if(navDashboard_) InvalidateRect(navDashboard_,nullptr,TRUE);
     if(navApplications_) InvalidateRect(navApplications_,nullptr,TRUE);
     if(navWebsites_) InvalidateRect(navWebsites_,nullptr,TRUE);
@@ -415,7 +423,9 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         if(id>=ID_NAV_DASHBOARD && id<=ID_NAV_SETTINGS) {
             const int page=id-ID_NAV_DASHBOARD;
             const bool selected=page==currentPage_;
-            HBRUSH fill=CreateSolidBrush(selected?(gDarkTheme?RGB(39,58,85):RGB(231,239,255)):(gDarkTheme?RGB(27,36,51):RGB(255,255,255)));
+            const bool hot=(item->itemState&ODS_HOTLIGHT)!=0;
+            HBRUSH fill=CreateSolidBrush(selected?(gDarkTheme?RGB(39,58,85):RGB(231,239,255)):
+                (hot?(gDarkTheme?RGB(42,55,74):RGB(241,246,255)):(gDarkTheme?RGB(27,36,51):RGB(255,255,255))));
             HPEN edge=CreatePen(PS_SOLID,1,selected?(gDarkTheme?RGB(62,103,158):RGB(205,221,250)):(gDarkTheme?RGB(27,36,51):RGB(255,255,255)));
             HGDIOBJ oldBrush=SelectObject(item->hDC,fill),oldPen=SelectObject(item->hDC,edge);
             RoundRect(item->hDC,item->rcItem.left+1,item->rcItem.top+1,item->rcItem.right-1,item->rcItem.bottom-1,9,9);
