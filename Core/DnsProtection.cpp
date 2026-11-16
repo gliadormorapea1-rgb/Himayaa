@@ -165,19 +165,23 @@ constexpr wchar_t kScriptPart2[] = LR"PS(function Backup-Settings {
     $items = @()
     foreach ($policy in $policyKeys) {
       $fullPath = Join-Path $root $policy.File
-      & reg.exe query $policy.Key *> $null
-      $queryCode = $LASTEXITCODE
-      if ($queryCode -eq 0) {
-        & reg.exe export $policy.Key $fullPath /y *> $null
+      # Test the registry provider path first. A missing key is a normal
+      # state, and reg.exe query writes an error to stderr for that case.
+      # In Windows PowerShell 5.1, native stderr can become a terminating
+      # NativeCommandError when ErrorActionPreference is Stop.
+      $registryPath = 'HKLM:\\' + $policy.Key.Substring(5)
+      if (Test-Path -LiteralPath $registryPath) {
+        # Merge native stderr into the success stream so exit-code handling
+        # remains deterministic under Windows PowerShell 5.1.
+        $exportOutput = & reg.exe export $policy.Key $fullPath /y 2>&1
         $exportCode = $LASTEXITCODE
         if ($exportCode -ne 0 -or -not (Test-Path -LiteralPath $fullPath)) {
-          throw "Could not back up browser policy key '$($policy.Key)' (reg.exe export exit code $exportCode)."
+          $exportDetail = (@($exportOutput) -join ' ')
+          throw "Could not back up browser policy key '$($policy.Key)' (reg.exe export exit code $exportCode). $exportDetail"
         }
         $items += [pscustomobject]@{ Key=$policy.Key; File=$policy.File; Exists=$true }
-      } elseif ($queryCode -eq 1) {
-        $items += [pscustomobject]@{ Key=$policy.Key; File=$policy.File; Exists=$false }
       } else {
-        throw "Could not inspect browser policy key '$($policy.Key)' (reg.exe query exit code $queryCode)."
+        $items += [pscustomobject]@{ Key=$policy.Key; File=$policy.File; Exists=$false }
       }
     }
     $b.PolicyKeys = @($items)
