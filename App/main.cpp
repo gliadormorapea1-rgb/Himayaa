@@ -45,7 +45,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand) {
         if (command == L"--check-permanent-strict-lock") {
             himaya::ConfigStore store;
             if (!store.isReady()) return 20; // Fail closed if lock state cannot be verified.
-            return store.hasPermanentStrictLock() ? 10 : 0;
+            const int status = store.permanentStrictLockStatus();
+            return status < 0 ? 20 : status == 1 ? 10 : 0;
         }
         if (command == L"--apply-sites" || command == L"--restore-sites") return runWebsiteMaintenance(command);
         if (command == L"--restore-dns") {
