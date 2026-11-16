@@ -8,7 +8,7 @@
 
 namespace himaya {
 namespace {
-constexpr wchar_t kScript[] = LR"PS(
+constexpr wchar_t kScriptPart1[] = LR"PS(
 param([ValidateSet('Enable','Sync','Restore')][string]$Mode)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -191,7 +191,8 @@ function Backup-Settings {
   Write-Log "Settings backup validated and saved. DNS entries: $(@($b.Dns).Count); browser policy backup complete: $($b.PolicyBackupComplete)."
 }
 
-function Apply-Protection {
+)PS";
+constexpr wchar_t kScriptPart2[] = LR"PS(function Apply-Protection {
   Backup-Settings
   $configuredIPv4 = 0
   $configuredIPv6 = 0
@@ -406,6 +407,11 @@ try {
   exit 1
 }
 )PS";
+std::wstring buildScript(){
+  std::wstring result(kScriptPart1);
+  result += kScriptPart2;
+  return result;
+}
 std::wstring rootPath(){
   PWSTR raw=nullptr;
   if(FAILED(SHGetKnownFolderPath(FOLDERID_ProgramData,KF_FLAG_CREATE,nullptr,&raw))||!raw)return {};
@@ -413,9 +419,10 @@ std::wstring rootPath(){
   std::error_code ec;std::filesystem::create_directories(p,ec);return ec?L"":p.wstring();
 }
 bool writeScript(const std::wstring& path){
-  const int n=WideCharToMultiByte(CP_UTF8,0,kScript,-1,nullptr,0,nullptr,nullptr);if(n<=1)return false;
+  const std::wstring scriptText=buildScript();
+  const int n=WideCharToMultiByte(CP_UTF8,0,scriptText.c_str(),-1,nullptr,0,nullptr,nullptr);if(n<=1)return false;
   std::string data(static_cast<size_t>(n),'\0');
-  if(!WideCharToMultiByte(CP_UTF8,0,kScript,-1,data.data(),n,nullptr,nullptr))return false;
+  if(!WideCharToMultiByte(CP_UTF8,0,scriptText.c_str(),-1,data.data(),n,nullptr,nullptr))return false;
   data.resize(n-1);
   const auto tmp=path+L".tmp";
   HANDLE h=CreateFileW(tmp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
