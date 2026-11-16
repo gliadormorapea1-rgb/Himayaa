@@ -20,6 +20,7 @@
 namespace himaya {
 namespace {
 constexpr wchar_t kBegin[] = L"هلو محمد";
+constexpr wchar_t kLegacyBegin[] = L"# BEGIN HIMAYA MANAGED BLOCK";
 constexpr wchar_t kEnd[] = L"# END HIMAYA MANAGED BLOCK";
 constexpr wchar_t kAdultFeed[] = L"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts";
 constexpr wchar_t kAdultFeedCdn[] = L"https://cdn.jsdelivr.net/gh/StevenBlack/hosts@master/alternates/porn/hosts";
@@ -262,7 +263,9 @@ bool removeManagedBlock(const std::wstring& source, std::wstring& cleaned, bool&
     foundBlock = false;
     while (std::getline(input, line)) {
         const auto value = trim(line);
-        if (value == kBegin) {
+        // Accept both the current opening marker and the marker
+        // written by earlier Himaya builds, so upgrades can replace old blocks.
+        if (value == kBegin || value == kLegacyBegin) {
             if (inside || foundBlock) return false;
             inside = true;
             foundBlock = true;
