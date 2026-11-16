@@ -100,6 +100,20 @@ try {
             $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and
             -not $_.GetAttribute('Description').StartsWith('Himaya Security:',[System.StringComparison]::Ordinal)
         })
+        $effectiveText = Get-AppLockerPolicy -Effective -Xml
+        $effectiveExternal = @()
+        $effectiveExe = $null
+        if (-not [string]::IsNullOrWhiteSpace([string]$effectiveText)) {
+            [xml]$effectiveDoc = [string]$effectiveText
+            $effectiveExe = $effectiveDoc.DocumentElement.SelectSingleNode("RuleCollection[@Type='Exe']")
+            if ($null -ne $effectiveExe) {
+                $effectiveExternal = @($effectiveExe.ChildNodes | Where-Object {
+                    $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and
+                    -not $_.GetAttribute('Description').StartsWith('Himaya Security:',[System.StringComparison]::Ordinal)
+                })
+            }
+        }
+        $hasExternalPolicy = ($external.Count -gt 0 -or $effectiveExternal.Count -gt 0)
         $requested = @()
         if (-not $RestoreOnly -and (Test-Path -LiteralPath $RulesFile)) {
             foreach ($line in [System.IO.File]::ReadAllLines($RulesFile,[System.Text.Encoding]::Unicode)) {
@@ -109,11 +123,12 @@ try {
                 $requested += ,@($line.Substring(0,$split),$line.Substring($split+1))
             }
         }
-        if ($requested.Count -gt 0 -and $external.Count -gt 0 -and
-            $exe.GetAttribute('EnforcementMode') -eq 'AuditOnly') {
-            throw 'An existing AppLocker EXE policy is set to Audit only. Himaya will not change another policy owner''s enforcement mode.'
+        if ($requested.Count -gt 0 -and $hasExternalPolicy -and
+            ($exe.GetAttribute('EnforcementMode') -eq 'AuditOnly' -or
+             ($null -ne $effectiveExe -and $effectiveExe.GetAttribute('EnforcementMode') -eq 'AuditOnly'))) {
+            throw 'An existing effective AppLocker EXE policy is set to Audit only. Himaya will not change another policy owner''s enforcement mode.'
         }
-        if ($requested.Count -gt 0 -and $external.Count -eq 0) {
+        if ($requested.Count -gt 0 -and -not $hasExternalPolicy) {
             $allow = $doc.CreateElement('FilePathRule')
             $allow.SetAttribute('Id',([guid]::NewGuid()).ToString('B'))
             $allow.SetAttribute('Name','Himaya baseline allow')
