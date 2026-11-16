@@ -238,7 +238,7 @@ bool synchronizeFolderAccess(const std::vector<std::wstring>& folders) {
 }
 }
 PolicySyncResult ExecutionPolicy::synchronize(ConfigStore& store) {
-    if(!store.isReady()) return {false,0,L"قاعدة بيانات Himaya غير متاحة للخدمة."};
+    if(!store.isReady()) return {false,0,L"The Himaya database is unavailable to the service."};
     std::vector<Rule> rules;
     std::vector<std::wstring> folders;
     for(const auto& e:store.load(L"applications")) {
@@ -258,22 +258,22 @@ PolicySyncResult ExecutionPolicy::synchronize(ConfigStore& store) {
     static std::wstring last;
     const auto current=fingerprint(rules);
     if(current==last) {
-        if(!synchronizeFolderAccess(folders)) return {false,0,L"تعذر تطبيق أو استعادة صلاحيات الوصول للمجلدات."};
-        return {true,rules.size(),L"سياسات التشغيل والوصول محدثة."};
+        if(!synchronizeFolderAccess(folders)) return {false,0,L"Could not apply or restore folder access permissions."};
+        return {true,rules.size(),L"Execution and access policies are up to date."};
     }
-    if(!configureSrp()) return {false,0,L"تعذر تهيئة سياسات Windows Software Restriction Policies."};
-    if(!removeManagedRules()) return {false,0,L"تعذر إزالة قواعد Himaya القديمة بأمان."};
-    for(const auto& rule:rules) if(!addRule(rule)) return {false,0,L"تعذر تسجيل إحدى قواعد منع التشغيل في Windows."};
-    if(!synchronizeFolderAccess(folders)) return {false,0,L"تعذر تطبيق أو استعادة صلاحيات الوصول للمجلدات."};
+    if(!configureSrp()) return {false,0,L"Could not initialize Windows Software Restriction Policies."};
+    if(!removeManagedRules()) return {false,0,L"Could not safely remove old Himaya rules."};
+    for(const auto& rule:rules) if(!addRule(rule)) return {false,0,L"Could not register one of the Windows execution-blocking rules."};
+    if(!synchronizeFolderAccess(folders)) return {false,0,L"Could not apply or restore folder access permissions."};
     last=current;
     DWORD_PTR ignored=0;
     SendMessageTimeoutW(HWND_BROADCAST,WM_SETTINGCHANGE,0,reinterpret_cast<LPARAM>(L"Software\\Policies\\Microsoft\\Windows\\Safer\\CodeIdentifiers"),SMTO_ABORTIFHUNG,2000,&ignored);
     store.logEvent(L"execution_policy_synced",std::to_wstring(rules.size()));
-    return {true,rules.size(),L"تم تحديث قواعد منع التشغيل والوصول للمجلدات المحددة."};
+    return {true,rules.size(),L"Execution-blocking rules and access restrictions for selected folders were updated."};
 }
 PolicySyncResult ExecutionPolicy::restoreAll() {
-    if(!removeManagedRules()) return {false,0,L"تعذر إزالة قواعد منع التشغيل عند إيقاف الخدمة."};
-    if(!synchronizeFolderAccess({})) return {false,0,L"تعذر استعادة صلاحيات بعض المجلدات."};
-    return {true,0,L"تمت إزالة قواعد Himaya واستعادة صلاحيات المجلدات."};
+    if(!removeManagedRules()) return {false,0,L"Could not remove execution-blocking rules when the service stopped."};
+    if(!synchronizeFolderAccess({})) return {false,0,L"Could not restore permissions for some folders."};
+    return {true,0,L"Himaya rules were removed and folder permissions were restored."};
 }
 }
