@@ -130,7 +130,7 @@ try {
         }
         if ($requested.Count -gt 0 -and -not $hasExternalPolicy) {
             $allow = $doc.CreateElement('FilePathRule')
-            $allow.SetAttribute('Id',([guid]::NewGuid()).ToString('B'))
+            $allow.SetAttribute('Id',([guid]::NewGuid()).ToString('D'))
             $allow.SetAttribute('Name','Himaya baseline allow')
             $allow.SetAttribute('Description','Himaya Security: baseline allow')
             $allow.SetAttribute('UserOrGroupSid','S-1-1-0')
@@ -145,7 +145,7 @@ try {
         }
         foreach ($item in $requested) {
             $rule = $doc.CreateElement('FilePathRule')
-            $rule.SetAttribute('Id',([guid]::NewGuid()).ToString('B'))
+            $rule.SetAttribute('Id',([guid]::NewGuid()).ToString('D'))
             $rule.SetAttribute('Name','Himaya blocked application')
             $rule.SetAttribute('Description','Himaya Security: '+$item[1])
             $rule.SetAttribute('UserOrGroupSid',$item[0])
