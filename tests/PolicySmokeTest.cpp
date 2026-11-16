@@ -48,5 +48,32 @@ int wmain() {
     auto removed=himaya::ExecutionPolicy::synchronize(store);
     const bool stillPresent=registryContains(testPath);
     DeleteFileW(testPath.c_str());
-    return removed.success && !stillPresent ? 0 : 17;
+    if(!removed.success || stillPresent) return 17;
+
+    const std::wstring folder=std::wstring(temp)+L"HimayaPolicySmokeFolder";
+    const std::wstring child=folder+L"\\probe.txt";
+    RemoveDirectoryW(folder.c_str());
+    if(!CreateDirectoryW(folder.c_str(),nullptr)) return 18;
+    HANDLE childFile=CreateFileW(child.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(childFile==INVALID_HANDLE_VALUE){RemoveDirectoryW(folder.c_str());return 19;}
+    const char sample[]="Himaya ACL test";DWORD childWritten=0;
+    WriteFile(childFile,sample,sizeof(sample),&childWritten,nullptr);CloseHandle(childFile);
+    if(!store.addEntry(L"paths",folder,L"long",L"simple")){DeleteFileW(child.c_str());RemoveDirectoryW(folder.c_str());return 20;}
+    auto folderApplied=himaya::ExecutionPolicy::synchronize(store);
+    HANDLE denied=CreateFileW(folder.c_str(),FILE_LIST_DIRECTORY,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+        nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,nullptr);
+    const DWORD deniedError=GetLastError();
+    if(denied!=INVALID_HANDLE_VALUE) CloseHandle(denied);
+    if(!folderApplied.success || denied!=INVALID_HANDLE_VALUE || deniedError!=ERROR_ACCESS_DENIED) {
+        store.removeEntry(L"paths",folder);himaya::ExecutionPolicy::synchronize(store);
+        DeleteFileW(child.c_str());RemoveDirectoryW(folder.c_str());return 21;
+    }
+    if(!store.removeEntry(L"paths",folder)){himaya::ExecutionPolicy::restoreAll();return 22;}
+    auto folderRestored=himaya::ExecutionPolicy::synchronize(store);
+    HANDLE accessible=CreateFileW(folder.c_str(),FILE_LIST_DIRECTORY,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+        nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,nullptr);
+    const bool accessRestored=accessible!=INVALID_HANDLE_VALUE;
+    if(accessible!=INVALID_HANDLE_VALUE) CloseHandle(accessible);
+    DeleteFileW(child.c_str());RemoveDirectoryW(folder.c_str());
+    return folderRestored.success && accessRestored ? 0 : 23;
 }
