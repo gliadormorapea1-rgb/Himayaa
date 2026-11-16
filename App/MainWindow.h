@@ -19,6 +19,7 @@ private:
     void saveProfile();
     void applyWebsites();
     void restoreWebsites();
+    void restoreOriginalHosts();
     void exportReport();
     std::wstring selectedCategory() const;
     std::wstring selectedDuration() const;
@@ -28,7 +29,7 @@ private:
     HINSTANCE instance_{};
     HWND hwnd_{};
     HWND category_{}, profile_{}, duration_{}, list_{}, input_{}, browse_{}, status_{};
-    HWND settings_{}, summary_{}, applySites_{}, restoreSites_{};
+    HWND settings_{}, summary_{}, applySites_{}, restoreSites_{}, restoreOriginalHosts_{};
     std::vector<himaya::Entry> visibleEntries_;
     himaya::ConfigStore store_;
 };
