@@ -119,10 +119,10 @@ bool ConfigStore::initialize() {
     execute("DELETE FROM settings WHERE key IN ('unlock_mode','password_admin');");
     if (getSetting(L"active_profile").empty()) setSetting(L"active_profile", L"simple");
     execute("INSERT OR IGNORE INTO profiles VALUES"
-        "('simple','الإدمان البسيط','حدود وتنبيهات وجلسات تركيز'),"
-        "('moderate','الإدمان المتوسط','جداول حظر وتأخير فك القيود'),"
-        "('severe','الإدمان الحاد','قواعد صارمة ومراجعة إدارية'),"
-        "('recovery','التعافي المكثف','متابعة مكثفة وأهداف ومساندة موثوقة');");
+        "('simple','Basic','Limits, reminders, and focus sessions'),"
+        "('moderate','Moderate','Blocking schedules and delayed unlocking'),"
+        "('severe','Strict','Strict rules and administrative review'),"
+        "('recovery','Intensive recovery','Progress tracking, goals, and support');");
     return true;
 }
 
@@ -237,7 +237,7 @@ bool ConfigStore::exportEventsCsv(const std::wstring& path) const {
         escaped += L"\"";
         return escaped;
     };
-    std::wstring csv = L"\uFEFFالتاريخ,الحدث,التفاصيل\r\n";
+    std::wstring csv = L"\uFEFFTimestamp,Event,Details\r\n";
     for (const auto& event : events) {
         csv += quote(event.timestamp) + L"," + quote(event.type) + L"," + quote(event.details) + L"\r\n";
     }
