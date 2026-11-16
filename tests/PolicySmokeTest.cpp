@@ -87,7 +87,7 @@ int wmain() {
     if(report==INVALID_HANDLE_VALUE){DeleteFileW(reportPath.c_str());return 26;}
     LARGE_INTEGER reportSize{};
     const bool sizeOk=GetFileSizeEx(report,&reportSize) && reportSize.QuadPart>16 && reportSize.QuadPart<4*1024*1024;
-    std::string reportBytes(sizeOk?static_cast<size_t>(reportSize.QuadPart):0,'\\0');
+    std::string reportBytes(sizeOk?static_cast<size_t>(reportSize.QuadPart):0,'\0');
     DWORD reportRead=0;
     const bool readOk=sizeOk && ReadFile(report,reportBytes.data(),static_cast<DWORD>(reportBytes.size()),&reportRead,nullptr) &&
                       reportRead==reportBytes.size();
