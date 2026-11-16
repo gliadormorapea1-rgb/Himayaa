@@ -64,7 +64,13 @@ jobs:
           if ($scriptText -match 'Set-DnsClientServerAddress[^\r\n]*-AddressFamily') {
             throw "Unsupported -AddressFamily parameter found on Set-DnsClientServerAddress."
           }
-          Write-Host "Embedded DNS PowerShell parsed successfully; no live DNS settings were changed."
+          if ($scriptText -match 'Get-NetAdapter[^\r\n]*-InterfaceIndex') {
+            throw "Unsupported -InterfaceIndex parameter found on Get-NetAdapter."
+          }
+          if ($scriptText.IndexOf("Repairing empty legacy backup") -lt 0) {
+            throw "Safe migration for the previous empty DNS backup is missing."
+          }
+          Write-Host "Embedded DNS PowerShell parsed successfully; static safety checks passed; no live DNS settings were changed."
 
       - name: Configure x64 Release
         run: cmake -S . -B build -A x64
