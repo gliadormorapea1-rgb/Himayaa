@@ -14,6 +14,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -24,6 +25,37 @@ jobs:
       - name: Build Release
         run: cmake --build build --config Release
 
+      - name: Locate and prepare executable
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "build/bin/Release/Himaya.exe",
+            "build/bin/Himaya.exe",
+            "build/Release/Himaya.exe",
+            "build/Himaya.exe"
+          )
+
+          $exe = $candidates |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+
+          if (!$exe) {
+            Write-Host "Searching for Himaya.exe..."
+            Get-ChildItem build -Recurse -Filter Himaya.exe |
+              Select-Object -ExpandProperty FullName
+
+            throw "Himaya.exe was not generated."
+          }
+
+          New-Item -ItemType Directory -Force -Path "build/bin" |
+            Out-Null
+
+          if ($exe -ne "build/bin/Himaya.exe") {
+            Copy-Item $exe "build/bin/Himaya.exe" -Force
+          }
+
+          Write-Host "Executable ready: build/bin/Himaya.exe"
+
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
 
@@ -31,8 +63,20 @@ jobs:
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found at $iscc" }
-          & $iscc Installer\Himaya.iss
+
+          if (!(Test-Path $iscc)) {
+            throw "Inno Setup compiler not found: $iscc"
+          }
+
+          & $iscc "Installer\Himaya.iss"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup compilation failed."
+          }
+
+          if (!(Test-Path "Installer/Output/Himaya-Setup.exe")) {
+            throw "Installer was not generated."
+          }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -41,3 +85,4 @@ jobs:
           path: |
             build/bin/Himaya.exe
             Installer/Output/Himaya-Setup.exe
+          if-no-files-found: error
