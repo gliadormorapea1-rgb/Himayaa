@@ -154,7 +154,7 @@ void MainWindow::refreshList() {
     for (const auto& entry : visibleEntries_) {
         std::wstring label = entry.value;
         if (selectedCategory() == L"applications") {
-            label += entry.lockMode == L"long" ? L"   |   قفل طويل الأجل (محفوظ فقط)" : L"   |   قفل مؤقت (محفوظ فقط)";
+            label += entry.lockMode == L"long" ? L"   |   قفل طويل الأجل (تطبقه خدمة الحماية)" : L"   |   قفل مؤقت (تطبقه خدمة الحماية)";
         }
         SendMessageW(list_, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
     }
@@ -170,7 +170,7 @@ void MainWindow::addEntry() {
     const auto duration = category == L"applications" ? selectedDuration() : L"long";
     if (store_.addEntry(category, value, duration, selectedProfile())) {
         SetWindowTextW(input_, L""); refreshList();
-        setStatus(category == L"websites" ? L"تم حفظ الموقع. اضغط تطبيق حظر المواقع لتفعيل القواعد بصلاحيات المسؤول." : L"تم حفظ القاعدة في SQLite. محرك حظر التطبيقات والمسارات لم يُفعّل بعد.");
+        setStatus(category == L"websites" ? L"تم حفظ الموقع. اضغط تطبيق حظر المواقع لتفعيل القواعد بصلاحيات المسؤول." : L"تم حفظ القاعدة في SQLite. ستتولى خدمة HimayaGuard تطبيق منع التشغيل تلقائيًا بعد تثبيت الخدمة.");
     } else {
         MessageBoxW(hwnd_, store_.lastError().empty() ? L"تعذر حفظ العنصر." : store_.lastError().c_str(), L"Himaya", MB_OK|MB_ICONERROR);
     }
@@ -180,7 +180,7 @@ void MainWindow::removeEntry() {
     const LRESULT index = SendMessageW(list_, LB_GETCURSEL, 0, 0);
     if (index == LB_ERR || static_cast<size_t>(index) >= visibleEntries_.size()) return;
     if (store_.removeEntry(selectedCategory(), visibleEntries_[static_cast<size_t>(index)].value)) {
-        refreshList(); setStatus(L"تم حذف القاعدة من قاعدة البيانات. لم يتم تغيير إعدادات Windows.");
+        refreshList(); setStatus(L"تم حذف القاعدة؛ ستزيل خدمة HimayaGuard سياسة المنع في المزامنة التالية.");
     }
 }
 
