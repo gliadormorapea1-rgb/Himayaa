@@ -169,8 +169,8 @@ void MainWindow::layoutControls() {
     move(input_,x,254,contentW-browseW-addW-20,38);
     move(browse_,x+contentW-browseW-addW-14,254,browseW,38);
     move(addButton_,x+contentW-addW,254,addW,38);
-    move(list_,x,310,contentW,std::max(190,height-430));
-    const int actionY=height-104;
+    move(list_,x,310,contentW,std::max(190,height-520));
+    const int actionY=height-142;
     move(removeButton_,x,actionY,180,38);
     move(refreshButton_,x+194,actionY,140,38);
     move(reportButton_,x+348,actionY,230,38);
