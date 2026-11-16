@@ -204,4 +204,63 @@ bool ConfigStore::logEvent(const std::wstring& eventType, const std::wstring& de
     return ok;
 }
 
+
+std::vector<Event> ConfigStore::loadRecentEvents(size_t limit) const {
+    std::vector<Event> result;
+    if (!db_) return result;
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(db_,
+        "SELECT datetime(created_at,'unixepoch','localtime'),event_type,details FROM events ORDER BY id DESC LIMIT ?1",
+        -1, &statement, nullptr) != SQLITE_OK) return result;
+    sqlite3_bind_int64(statement, 1, static_cast<sqlite3_int64>(limit));
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        result.push_back({
+            fromUtf8(sqlite3_column_text(statement, 0)),
+            fromUtf8(sqlite3_column_text(statement, 1)),
+            fromUtf8(sqlite3_column_text(statement, 2))
+        });
+    }
+    sqlite3_finalize(statement);
+    return result;
+}
+
+bool ConfigStore::exportEventsCsv(const std::wstring& path) const {
+    if (!db_ || path.empty()) return false;
+    const auto events = loadRecentEvents(5000);
+    auto quote = [](const std::wstring& value) {
+        std::wstring escaped = L"\"";
+        for (wchar_t ch : value) {
+            if (ch == L'\"') escaped += L"\"\"";
+            else if (ch == L'\r') continue;
+            else escaped += ch;
+        }
+        escaped += L"\"";
+        return escaped;
+    };
+    std::wstring csv = L"\uFEFFالتاريخ,الحدث,التفاصيل\r\n";
+    for (const auto& event : events) {
+        csv += quote(event.timestamp) + L"," + quote(event.type) + L"," + quote(event.details) + L"\r\n";
+    }
+    const auto bytes = toUtf8(csv);
+    if (bytes.empty() && !csv.empty()) return false;
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    size_t offset = 0;
+    bool ok = true;
+    while (offset < bytes.size()) {
+        const DWORD chunk = static_cast<DWORD>(std::min<size_t>(bytes.size() - offset, 1024u * 1024u));
+        DWORD written = 0;
+        if (!WriteFile(file, bytes.data() + offset, chunk, &written, nullptr) || written == 0) {
+            ok = false;
+            break;
+        }
+        offset += written;
+    }
+    if (!FlushFileBuffers(file)) ok = false;
+    CloseHandle(file);
+    if (!ok) DeleteFileW(path.c_str());
+    return ok;
+}
+
 } // namespace himaya
