@@ -63,6 +63,29 @@ begin
   end;
 end;
 
+function InitializeUninstall(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := False;
+  if not Exec(ExpandConstant('{app}\\Himaya.exe'), '--check-permanent-strict-lock', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    MsgBox('تعذر التحقق من حالة أقفال Strict. تم إلغاء إزالة البرنامج حفاظًا على الحماية.', mbCriticalError, MB_OK);
+    exit;
+  end;
+  if ResultCode = 10 then
+  begin
+    MsgBox('لا يمكن إزالة Himaya لأن هناك تطبيقًا أو موقعًا مقفولًا بوضع Strict ومدة Long-term. هذا القفل لا ينتهي تلقائيًا.', mbCriticalError, MB_OK);
+    exit;
+  end;
+  if ResultCode <> 0 then
+  begin
+    MsgBox('تعذر التأكد من حالة الحماية. لن تتم إزالة Himaya حتى يمكن التحقق منها بأمان.', mbCriticalError, MB_OK);
+    exit;
+  end;
+  Result := True;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ResultCode: Integer;
