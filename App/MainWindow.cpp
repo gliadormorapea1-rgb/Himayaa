@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include <winsvc.h>
 #include "Core/WebsiteBlocker.h"
 #include "Core/DnsProtection.h"
 #include <shellapi.h>
