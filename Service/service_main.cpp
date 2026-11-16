@@ -36,6 +36,9 @@ void WINAPI serviceMain(DWORD,LPWSTR*) {
         report(SERVICE_STOPPED,ERROR_DATABASE_FAILURE);
         CloseHandle(g_stopEvent);g_stopEvent=nullptr;return;
     }
+    const auto legacyShortsCleanup=himaya::DnsProtection::removeSocialPlatformBlocks();
+    if(!legacyShortsCleanup.success)
+        store.logEvent(L"legacy_social_blocks_cleanup_error",legacyShortsCleanup.message);
     report(SERVICE_RUNNING);
     store.logEvent(L"guard_service_started",L"Windows service started");
     std::wstring lastWebsiteSet;
