@@ -2,7 +2,6 @@
 #include "../Core/ExecutionPolicy.h"
 #include "../Core/WebsiteBlocker.h"
 #include <windows.h>
-#include <sddl.h>
 #include <string>
 #include <vector>
 
@@ -27,20 +26,8 @@ bool hostsContains(const char* needle) {
     return ok && bytes.find(needle)!=std::string::npos;
 }
 void printAppLockerDiagnostics() {
-    HANDLE token=nullptr;
-    if(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token)) {
-        DWORD bytes=0;GetTokenInformation(token,TokenUser,nullptr,0,&bytes);
-        std::vector<BYTE> buffer(bytes);
-        if(bytes && GetTokenInformation(token,TokenUser,buffer.data(),bytes,&bytes)) {
-            auto* user=reinterpret_cast<TOKEN_USER*>(buffer.data());
-            LPWSTR sid=nullptr;
-            if(ConvertSidToStringSidW(user->User.Sid,&sid) && sid) {
-                wprintf(L"Smoke test process SID: %ls\n",sid);
-                LocalFree(sid);
-            }
-        }
-        CloseHandle(token);
-    }
+    wchar_t userName[256]{};DWORD userNameLength=static_cast<DWORD>(std::size(userName));
+    if(GetUserNameW(userName,&userNameLength)) wprintf(L"Smoke test account: %ls\\n",userName);
     SC_HANDLE manager=OpenSCManagerW(nullptr,nullptr,SC_MANAGER_CONNECT);
     if(!manager) return;
     const wchar_t* names[]={L"AppIDSvc",L"appid",L"AppLockerFltr"};
