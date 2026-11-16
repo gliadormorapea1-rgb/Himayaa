@@ -70,6 +70,9 @@ jobs:
           if ($scriptText.IndexOf("Repairing empty legacy backup") -lt 0) {
             throw "Safe migration for the previous empty DNS backup is missing."
           }
+          if ($scriptText.IndexOf("Automatic rollback skipped because the backup is legacy") -lt 0) {
+            throw "Rollback must preserve an unvalidated legacy backup."
+          }
           Write-Host "Embedded DNS PowerShell parsed successfully; static safety checks passed; no live DNS settings were changed."
 
       - name: Configure x64 Release
