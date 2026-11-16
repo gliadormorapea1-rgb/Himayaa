@@ -409,7 +409,7 @@ WebsiteBlockResult WebsiteBlocker::restore() {
         return {false, 0, L"Himaya markers in the hosts file are incomplete or duplicated. The file was not modified."};
     if (!foundBlock) return {true, 0, L"There are no Himaya rules in the hosts file."};
     if (!writeAtomically(path, updated)) return {false, 0, L"Could not restore the hosts file. The original file was not replaced."};
-    DeleteFileW((path + L".himaya-original.bak").c_str());
+    // Keep the original backup so the full-file restore action remains available.
     const bool dnsFlushed = flushDns();
     return {true, 0, dnsFlushed ? L"Himaya rules were removed. All other hosts file entries were preserved." : L"Himaya rules were removed, but the DNS cache could not be flushed automatically."};
 }
