@@ -158,9 +158,17 @@ bool ConfigStore::addEntry(const std::wstring& category, const std::wstring& val
     if (!db_ || value.empty()) return false;
     sqlite3_stmt* statement = nullptr;
     const char* sql = "INSERT INTO entries(category,value,lock_mode,profile,expires_at) VALUES(?1,?2,?3,?4,"
-                      "CASE ?3 WHEN '2m' THEN unixepoch()+120 WHEN '1h' THEN unixepoch()+3600 "
-                      "WHEN '24h' THEN unixepoch()+86400 WHEN '7d' THEN unixepoch()+604800 "
-                      "WHEN '30d' THEN unixepoch()+2592000 WHEN '90d' THEN unixepoch()+7776000 ELSE NULL END) "
+                      "CASE "
+                      "WHEN ?3='long' THEN NULL "
+                      "WHEN ?3='2m' THEN unixepoch()+120 "
+                      "WHEN ?3='1h' THEN unixepoch()+3600 "
+                      "WHEN ?3='24h' OR ?3='1d' THEN unixepoch()+86400 "
+                      "WHEN ?3='7d' THEN unixepoch()+604800 "
+                      "WHEN ?3='30d' THEN unixepoch()+2592000 "
+                      "WHEN ?3='365d' OR ?3='1y' THEN unixepoch()+31536000 "
+                      "WHEN substr(?3,1,6)='until:' THEN CAST(substr(?3,7) AS INTEGER) "
+                      "WHEN ?3='90d' THEN unixepoch()+7776000 "
+                      "ELSE NULL END) "
                       "ON CONFLICT(category,value) DO UPDATE SET lock_mode=excluded.lock_mode,profile=excluded.profile,expires_at=excluded.expires_at";
     if (sqlite3_prepare_v2(db_, sql, -1, &statement, nullptr) != SQLITE_OK) { setError(sqlite3_errmsg(db_)); return false; }
     bindText(statement, 1, category); bindText(statement, 2, value);
