@@ -752,7 +752,7 @@ void MainWindow::refreshList() {
     visibleEntries_ = store_.load(selectedCategory());
     for (const auto& entry : visibleEntries_) {
         std::wstring label = entry.value;
-        if (selectedCategory() == L"applications" || selectedCategory() == L"websites") {
+        if (selectedCategory() == L"applications" || selectedCategory() == L"websites" || selectedCategory() == L"social_sites") {
             label += entry.profile == L"severe" ? L"   |   STRICT — locked until expiry" : L"   |   Basic";
             label += entry.lockMode == L"long" ? L"   |   Long-term" : (entry.lockMode == L"2m" ? L"   |   2-minute test" : L"   |   Timed lock");
         }
@@ -840,6 +840,7 @@ void MainWindow::addEntry() {
     if (store_.addEntry(category, value, duration, selectedProfile())) {
         SetWindowTextW(input_, L""); refreshList(); refreshDashboard(); refreshStatistics();
         setStatus(category == L"websites" ? L"Website saved. HimayaGuard will synchronize the website block automatically; you can also apply it now." :
+            category == L"social_sites" ? L"Full-domain social lock saved. HimayaGuard will apply it and automatically restore access when its timer expires." :
             category == L"paths" ? L"Folder saved. The service will restrict access and file execution, while preserving the original permissions for restoration." :
             L"Application saved. HimayaGuard will automatically enforce the execution block.");
     } else {
@@ -862,7 +863,7 @@ void MainWindow::removeEntry() {
 void MainWindow::applyWebsites() {
     if (selectedCategory() != L"websites") return;
     const int answer = MessageBoxW(hwnd_,
-        L"Only websites you added to Himaya will be written to the managed Hosts section. Adult-content filtering is handled separately. Continue?",
+        L"Your custom website rules and active full-domain social locks will be synchronized. Adult-content filtering remains separate. Continue?",
         L"Confirm custom website blocking", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
     if (answer != IDYES) return;
     std::vector<std::wstring> domains;
