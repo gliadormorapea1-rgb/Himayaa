@@ -205,8 +205,7 @@ bool restoreFolderAccess(const std::wstring& id,const std::wstring& path,const s
     if(exists(path)) {
         PSECURITY_DESCRIPTOR descriptor=nullptr;
         if(!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(),SDDL_REVISION_1,&descriptor,nullptr)) return false;
-        const BOOL ok=SetFileSecurityW(path.c_str(),
-            OWNER_SECURITY_INFORMATION|GROUP_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,descriptor);
+        const BOOL ok=SetFileSecurityW(path.c_str(),DACL_SECURITY_INFORMATION,descriptor);
         LocalFree(descriptor);
         if(!ok) return false;
     }
