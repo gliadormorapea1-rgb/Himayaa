@@ -270,7 +270,7 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
       $properties = Get-ItemProperty -LiteralPath $Path -ErrorAction Stop
       $values = @($properties.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { [string]$_.Value })
       if ($values -contains $pattern) { continue }
-      $slot = 900
+      $slot = 1
       while ($null -ne $properties.PSObject.Properties[[string]$slot]) { $slot++ }
       New-ItemProperty -LiteralPath $Path -Name ([string]$slot) -PropertyType String -Value $pattern -Force -ErrorAction Stop | Out-Null
     }
