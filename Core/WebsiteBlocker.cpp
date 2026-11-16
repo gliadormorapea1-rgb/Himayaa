@@ -298,6 +298,7 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
 
         // Supplemental adult domains that may be missing from the community feed.
         domains.insert(L"xnxx-arabic.com");
+        domains.insert(L"ww.xnxx-arabic.com");
     }
     if (domains.empty()) return {false, 0, L"There are no valid websites to block."};
 
