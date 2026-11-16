@@ -2,7 +2,6 @@
 #include "ConfigStore.h"
 #include "AppLockerPolicy.h"
 #include <windows.h>
-#include <WtsApi32.h>
 #include <aclapi.h>
 #include <sddl.h>
 #include <algorithm>
@@ -12,7 +11,6 @@
 #include <filesystem>
 #include <string>
 #include <vector>
-#include <set>
 
 namespace himaya {
 namespace {
@@ -77,45 +75,10 @@ bool setDword(HKEY key,const wchar_t* name,DWORD value) {
 }
 
 std::vector<std::wstring> targetUserSids() {
-    std::set<std::wstring> unique;
-    HANDLE processToken=nullptr;
-    if(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&processToken)) {
-        DWORD bytes=0; GetTokenInformation(processToken,TokenUser,nullptr,0,&bytes);
-        std::vector<BYTE> buffer(bytes);
-        if(bytes && GetTokenInformation(processToken,TokenUser,buffer.data(),bytes,&bytes)) {
-            auto* user=reinterpret_cast<TOKEN_USER*>(buffer.data());
-            BYTE systemBuffer[SECURITY_MAX_SID_SIZE]{}; DWORD systemSize=sizeof(systemBuffer);
-            const bool isSystem=CreateWellKnownSid(WinLocalSystemSid,nullptr,systemBuffer,&systemSize) &&
-                                EqualSid(user->User.Sid,systemBuffer);
-            if(!isSystem) {
-                LPWSTR raw=nullptr;
-                if(ConvertSidToStringSidW(user->User.Sid,&raw) && raw) { unique.insert(raw);LocalFree(raw); }
-            }
-        }
-        CloseHandle(processToken);
-    }
-    if(unique.empty()) {
-        PWTS_SESSION_INFOW sessions=nullptr; DWORD count=0;
-        if(WTSEnumerateSessionsW(WTS_CURRENT_SERVER_HANDLE,0,1,&sessions,&count)) {
-            for(DWORD i=0;i<count;++i) {
-                if(sessions[i].State!=WTSActive) continue;
-                HANDLE token=nullptr;
-                if(!WTSQueryUserToken(sessions[i].SessionId,&token)) continue;
-                DWORD bytes=0;GetTokenInformation(token,TokenUser,nullptr,0,&bytes);
-                std::vector<BYTE> buffer(bytes);
-                if(bytes && GetTokenInformation(token,TokenUser,buffer.data(),bytes,&bytes)) {
-                    auto* user=reinterpret_cast<TOKEN_USER*>(buffer.data());
-                    LPWSTR raw=nullptr;
-                    if(ConvertSidToStringSidW(user->User.Sid,&raw) && raw) {unique.insert(raw);LocalFree(raw);}
-                }
-                CloseHandle(token);
-            }
-            WTSFreeMemory(sessions);
-        }
-    }
-    return std::vector<std::wstring>(unique.begin(),unique.end());
+    // Authenticated Users covers interactive accounts but excludes the LocalSystem
+    // account used by HimayaGuard and its policy manager.
+    return {L"S-1-5-11"};
 }
-
 std::wstring fingerprint(const std::vector<Rule>& rules,const std::vector<std::wstring>& sids) {
     std::wstring s;
     for(const auto& r:rules){s+=r.path;s+=L'\n';s+=r.description;s+=L'\n';}
