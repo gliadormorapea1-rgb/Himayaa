@@ -9,6 +9,7 @@
 #include <uxtheme.h>
 #include <shlwapi.h>
 #include <string>
+#include <algorithm>
 #include <iterator>
 
 namespace {
