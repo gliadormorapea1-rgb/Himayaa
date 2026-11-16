@@ -189,16 +189,18 @@ bool ConfigStore::removeEntry(const std::wstring& category, const std::wstring& 
     return ok;
 }
 
-bool ConfigStore::hasPermanentStrictLock() const {
-    if (!db_) return false;
+int ConfigStore::permanentStrictLockStatus() const {
+    if (!db_) return -1;
     sqlite3_stmt* statement = nullptr;
     const char* sql = "SELECT 1 FROM entries WHERE profile='severe' "
                       "AND category IN ('applications','websites') "
                       "AND expires_at IS NULL LIMIT 1";
-    if (sqlite3_prepare_v2(db_, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
-    const bool found = sqlite3_step(statement) == SQLITE_ROW;
+    if (sqlite3_prepare_v2(db_, sql, -1, &statement, nullptr) != SQLITE_OK) return -1;
+    const int step = sqlite3_step(statement);
     sqlite3_finalize(statement);
-    return found;
+    if (step == SQLITE_ROW) return 1;
+    if (step == SQLITE_DONE) return 0;
+    return -1;
 }
 
 bool ConfigStore::setSetting(const std::wstring& key, const std::wstring& value) {
