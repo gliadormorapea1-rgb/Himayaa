@@ -43,6 +43,9 @@ endif()
 
 add_executable(Himaya WIN32 App/main.cpp App/MainWindow.cpp)
 target_link_libraries(Himaya PRIVATE HimayaCore comctl32 comdlg32 dwmapi uxtheme)
+if(MSVC)
+  target_link_options(Himaya PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
+endif()
 add_executable(HimayaGuard Service/service_main.cpp)
 target_link_libraries(HimayaGuard PRIVATE HimayaCore advapi32)
 
