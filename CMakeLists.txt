@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Himaya VERSION 0.4.0 LANGUAGES C CXX)
+project(Himaya VERSION 0.5.0 LANGUAGES C CXX)
 
 if(NOT WIN32)
   message(FATAL_ERROR "Himaya currently targets Windows only.")
