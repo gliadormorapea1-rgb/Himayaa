@@ -314,7 +314,7 @@ void MainWindow::startReelsSession() {
     std::wstring normalized;
     for(wchar_t ch:std::wstring(sites)) {
         if(ch==L',' || ch==L' ' || ch==L'\t') { if(ch==L',') normalized.push_back(L';'); continue; }
-        normalized.push_back(static_cast<wchar_t>(towlower(ch)));
+        normalized.push_back(static_cast<wchar_t>(std::towlower(ch)));
     }
     if(normalized.empty()) normalized=L"youtube.com;instagram.com;facebook.com";
     const LRESULT modeIndex=SendMessageW(reelsMode_,CB_GETCURSEL,0,0);
