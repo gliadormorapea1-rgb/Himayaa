@@ -243,7 +243,7 @@ try {
     }
     $doc.Save($PolicyFile)
     Set-AppLockerPolicy -XmlPolicy $PolicyFile -ErrorAction Stop
-    $converterPath = Join-Path $env:windir 'System32\\appidpolicyconverter.exe'
+    $converterPath = Join-Path (Join-Path $env:windir 'System32') 'appidpolicyconverter.exe'
     if (-not (Test-Path -LiteralPath $converterPath)) { throw 'The Windows AppLocker policy converter is unavailable.' }
     $converterProcess = Start-Process -FilePath $converterPath -Wait -PassThru -WindowStyle Hidden
     if ($converterProcess.ExitCode -ne 0) { throw ('The AppLocker policy converter failed with exit code '+$converterProcess.ExitCode) }
