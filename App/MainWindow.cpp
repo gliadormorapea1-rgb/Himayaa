@@ -87,11 +87,9 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         makeControl(hwnd_, L"STATIC", L"Protection profile", SS_LEFT, 275,145,150,24,0,instance_);
         profile_ = makeControl(hwnd_, WC_COMBOBOXW, L"", CBS_DROPDOWNLIST|WS_VSCROLL, 275,172,230,220,ID_PROFILE,instance_);
         SendMessageW(profile_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Basic"));
-        SendMessageW(profile_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Moderate"));
         SendMessageW(profile_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Strict"));
-        SendMessageW(profile_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Intensive recovery"));
         const auto active = store_.getSetting(L"active_profile", L"simple");
-        int profileIndex = active == L"moderate" ? 1 : active == L"severe" ? 2 : active == L"recovery" ? 3 : 0;
+        int profileIndex = active == L"severe" ? 1 : 0;
         SendMessageW(profile_, CB_SETCURSEL, profileIndex, 0);
 
         makeControl(hwnd_, L"STATIC", L"Application lock duration", SS_LEFT, 530,145,170,24,0,instance_);
@@ -191,7 +189,7 @@ std::wstring MainWindow::selectedDuration() const {
 
 std::wstring MainWindow::selectedProfile() const {
     const LRESULT index = SendMessageW(profile_, CB_GETCURSEL, 0, 0);
-    switch (index) { case 1: return L"moderate"; case 2: return L"severe"; case 3: return L"recovery"; default: return L"simple"; }
+    switch (index) { case 1: return L"severe"; default: return L"simple"; }
 }
 
 void MainWindow::saveProfile() {
