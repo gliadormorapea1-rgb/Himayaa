@@ -3,6 +3,7 @@
 #include "../Core/WebsiteBlocker.h"
 #include <windows.h>
 #include <string>
+#include <algorithm>
 #include <vector>
 
 namespace {
@@ -99,6 +100,16 @@ int wmain(int argc,wchar_t** argv) {
 
 
     if(!store.isReady()) {DeleteFileW(testPath.c_str());return 13;}
+    const std::wstring strictDomain=L"himaya-strict-test-"+std::to_wstring(GetCurrentProcessId())+L".invalid";
+    if(!store.addEntry(L"websites",strictDomain,L"2m",L"severe")) {DeleteFileW(testPath.c_str());return 30;}
+    const auto strictEntries=store.load(L"websites");
+    const bool strictSaved=std::any_of(strictEntries.begin(),strictEntries.end(),[&](const himaya::Entry& e) {
+        return e.value==strictDomain && e.lockMode==L"2m" && e.profile==L"severe";
+    });
+    if(!strictSaved || store.removeEntry(L"websites",strictDomain)) {
+        wprintf(L"Strict-mode timed website lock was not protected from early removal.\\n");
+        DeleteFileW(testPath.c_str());return 31;
+    }
     store.removeEntry(L"applications",testPath);
     if(!store.addEntry(L"applications",testPath,L"long",L"simple")) {DeleteFileW(testPath.c_str());return 14;}
     auto applied=himaya::ExecutionPolicy::synchronize(store);
