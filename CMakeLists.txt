@@ -42,7 +42,7 @@ if(MSVC)
 endif()
 
 add_executable(Himaya WIN32 App/main.cpp App/MainWindow.cpp)
-target_link_libraries(Himaya PRIVATE HimayaCore comctl32)
+target_link_libraries(Himaya PRIVATE HimayaCore comctl32 comdlg32 dwmapi uxtheme)
 add_executable(HimayaGuard Service/service_main.cpp)
 target_link_libraries(HimayaGuard PRIVATE HimayaCore advapi32)
 
