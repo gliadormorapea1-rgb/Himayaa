@@ -102,9 +102,10 @@ int wmain(int argc,wchar_t** argv) {
     if(!launchProbe(testPath,true)) {
         wprintf(L"AppLocker rule was written, but Windows did not block the probe process.\\n");
         printAppLockerDiagnostics();
-        store.removeEntry(L"applications",testPath);
-        himaya::ExecutionPolicy::synchronize(store);
-        DeleteFileW(testPath.c_str());return 29;
+        // Preserve the failing rule and probe executable on the disposable CI
+        // runner so the workflow can inspect the actual local/effective policy
+        // and registry state before any cleanup removes the evidence.
+        return 29;
     }
     if(!store.removeEntry(L"applications",testPath)) {DeleteFileW(testPath.c_str());return 16;}
     auto removed=himaya::ExecutionPolicy::synchronize(store);
