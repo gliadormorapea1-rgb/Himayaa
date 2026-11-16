@@ -236,7 +236,7 @@ void MainWindow::addEntry() {
     if (!value[0]) { MessageBoxW(hwnd_, L"Enter an application path, website, or folder path first.", L"Himaya", MB_OK|MB_ICONINFORMATION); return; }
     const auto category = selectedCategory();
     if(category==L"applications") {
-        wchar_t selected[MAX_PATH*4]{},self[MAX_PATH*4]{};
+        wchar_t selected[32768]{},self[32768]{};
         const DWORD selectedLength=GetFullPathNameW(value,static_cast<DWORD>(std::size(selected)),selected,nullptr);
         const DWORD selfLength=GetModuleFileNameW(nullptr,self,static_cast<DWORD>(std::size(self)));
         if(selectedLength && selectedLength<std::size(selected) && selfLength && selfLength<std::size(self)) {
