@@ -377,6 +377,27 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
     return {true, domains.size(), std::move(resultMessage)};
 }
 
+WebsiteBlockResult WebsiteBlocker::restoreOriginal() {
+    if (!isAdministrator()) return {false, 0, L"Administrator privileges are required to restore the original hosts file."};
+    const auto path = hostsPath();
+    if (path.empty()) return {false, 0, L"Could not locate the Windows hosts file."};
+
+    const auto backupPath = path + L".himaya-original.bak";
+    if (GetFileAttributesW(backupPath.c_str()) == INVALID_FILE_ATTRIBUTES)
+        return {false, 0, L"No original hosts-file backup was found. Himaya has not changed the file."};
+
+    std::wstring original;
+    if (!readFile(backupPath, original))
+        return {false, 0, L"Could not read the original hosts-file backup. The current file was not changed."};
+
+    if (!writeAtomically(path, original))
+        return {false, 0, L"Could not restore the original hosts file. The current file was not replaced."};
+
+    const bool dnsFlushed = flushDns();
+    return {true, 0, dnsFlushed
+        ? L"The original hosts file was restored from Himaya's backup. The backup was kept for future recovery."
+        : L"The original hosts file was restored, but the DNS cache could not be flushed automatically. Run ipconfig /flushdns."};
+}
 WebsiteBlockResult WebsiteBlocker::restore() {
     if (!isAdministrator()) return {false, 0, L"Administrator privileges are required to restore website settings."};
     const auto path = hostsPath();
