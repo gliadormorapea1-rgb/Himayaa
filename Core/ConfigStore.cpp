@@ -67,7 +67,7 @@ ConfigStore::ConfigStore() {
     }
     sqlite3_busy_timeout(db_, 5000);
     if (!initialize()) {
-        if (lastError_.empty()) lastError_ = L"تعذر تهيئة قاعدة بيانات Himaya.";
+        if (lastError_.empty()) lastError_ = L"Could not initialize the Himaya database.";
         sqlite3_close(db_);
         db_ = nullptr;
     }
@@ -78,9 +78,9 @@ ConfigStore::~ConfigStore() {
 }
 
 void ConfigStore::setError(const char* message) {
-    if (!message) { lastError_ = L"حدث خطأ غير معروف في قاعدة البيانات."; return; }
+    if (!message) { lastError_ = L"An unknown database error occurred."; return; }
     const int count = MultiByteToWideChar(CP_UTF8, 0, message, -1, nullptr, 0);
-    if (count <= 1) { lastError_ = L"حدث خطأ في قاعدة البيانات."; return; }
+    if (count <= 1) { lastError_ = L"A database error occurred."; return; }
     lastError_.assign(static_cast<size_t>(count), L'\0');
     MultiByteToWideChar(CP_UTF8, 0, message, -1, lastError_.data(), count);
     lastError_.resize(static_cast<size_t>(count - 1));
