@@ -82,7 +82,7 @@ bool configureSrp() {
     if(RegCreateKeyExW(HKEY_LOCAL_MACHINE,kBase,0,nullptr,0,KEY_SET_VALUE|KEY_WOW64_64KEY,nullptr,&key,nullptr)!=ERROR_SUCCESS) return false;
     const bool ok=setDword(key,L"DefaultLevel",0x00040000) &&
                   setDword(key,L"TransparentEnabled",1) &&
-                  setDword(key,L"PolicyScope",0) &&
+                  setDword(key,L"PolicyScope",1) &&
                   setDword(key,L"AuthenticodeEnabled",0);
     RegCloseKey(key); return ok;
 }
@@ -116,7 +116,7 @@ bool addRule(const Rule& rule) {
     if(rc!=ERROR_SUCCESS) return false;
     const bool ok=setString(child,L"ItemData",rule.path) &&
                   setString(child,L"Description",L"Himaya Security:"+rule.description) &&
-                  setDword(child,L"SaferFlags",0);
+                  setDword(child,L"SaferFlags",0) &&\n                  setDword(child,L"Level",0x00000000);
     RegCloseKey(child); return ok;
 }
 bool getOriginalSddl(const std::wstring& path,std::wstring& sddl) {
