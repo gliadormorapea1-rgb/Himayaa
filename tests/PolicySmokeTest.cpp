@@ -25,40 +25,41 @@ bool hostsContains(const char* needle) {
     CloseHandle(file);
     return ok && bytes.find(needle)!=std::string::npos;
 }
-bool registryContains(const std::wstring& expected) {
-    HKEY key=nullptr;
-    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,
-       L"SOFTWARE\\Policies\\Microsoft\\Windows\\Safer\\CodeIdentifiers\\0\\Paths",
-       0,KEY_READ|KEY_WOW64_64KEY,&key)!=ERROR_SUCCESS) return false;
-    bool found=false;
-    for(DWORD i=0;;++i) {
-        wchar_t name[256]{};DWORD n=static_cast<DWORD>(std::size(name));
-        if(RegEnumKeyExW(key,i,name,&n,nullptr,nullptr,nullptr,nullptr)!=ERROR_SUCCESS) break;
-        HKEY child=nullptr;
-        if(RegOpenKeyExW(key,name,0,KEY_QUERY_VALUE|KEY_WOW64_64KEY,&child)==ERROR_SUCCESS) {
-            wchar_t value[32768]{};DWORD bytes=sizeof(value),type=0;
-            DWORD level=0,levelBytes=sizeof(level),levelType=0;
-            const bool disallowed=RegQueryValueExW(child,L"Level",nullptr,&levelType,
-                reinterpret_cast<BYTE*>(&level),&levelBytes)==ERROR_SUCCESS &&
-                levelType==REG_DWORD && level==0x00000000;
-            if(RegQueryValueExW(child,L"ItemData",nullptr,&type,reinterpret_cast<BYTE*>(value),&bytes)==ERROR_SUCCESS &&
-               type==REG_SZ && _wcsicmp(value,expected.c_str())==0 && disallowed) found=true;
-            RegCloseKey(child);
+bool launchProbe(const std::wstring& path,bool expectBlocked) {
+    for(int attempt=0;attempt<10;++attempt) {
+        STARTUPINFOW startup{};startup.cb=sizeof(startup);
+        PROCESS_INFORMATION process{};
+        std::wstring command=L"\""+path+L"\" --probe";
+        std::vector<wchar_t> mutableCommand(command.begin(),command.end());mutableCommand.push_back(L'\0');
+        const BOOL started=CreateProcessW(path.c_str(),mutableCommand.data(),nullptr,nullptr,FALSE,
+            CREATE_NO_WINDOW,nullptr,nullptr,&startup,&process);
+        if(!started) {
+            const DWORD error=GetLastError();
+            if(expectBlocked && error==ERROR_ACCESS_DISABLED_BY_POLICY) return true;
+            if(!expectBlocked && error==ERROR_ACCESS_DISABLED_BY_POLICY) {Sleep(500);continue;}
+            return false;
         }
-        if(found) break;
+        if(expectBlocked) {
+            TerminateProcess(process.hProcess,1);
+            CloseHandle(process.hThread);CloseHandle(process.hProcess);
+            Sleep(500);
+            continue;
+        }
+        WaitForSingleObject(process.hProcess,5000);
+        DWORD exitCode=0;GetExitCodeProcess(process.hProcess,&exitCode);
+        CloseHandle(process.hThread);CloseHandle(process.hProcess);
+        return exitCode==42;
     }
-    RegCloseKey(key);return found;
+    return false;
 }
-}
-int wmain() {
+
+int wmain(int argc,wchar_t** argv) {
+    if(argc==2 && _wcsicmp(argv[1],L"--probe")==0) return 42;
     wchar_t temp[MAX_PATH]{};
     if(!GetTempPathW(MAX_PATH,temp)) return 10;
-    std::wstring testPath=std::wstring(temp)+L"HimayaPolicySmokeTest.exe";
-    HANDLE file=CreateFileW(testPath.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
-    if(file==INVALID_HANDLE_VALUE) return 11;
-    const char bytes[]="MZ";
-    DWORD written=0;WriteFile(file,bytes,2,&written,nullptr);CloseHandle(file);
-    if(written!=2) {DeleteFileW(testPath.c_str());return 12;}
+    std::wstring testPath=std::wstring(temp)+L"HimayaPolicySmokeProbe.exe";
+    wchar_t self[MAX_PATH]{};
+    if(!GetModuleFileNameW(nullptr,self,MAX_PATH) || !CopyFileW(self,testPath.c_str(),FALSE)) return 11;
     himaya::ConfigStore store;
     auto websiteApplied=himaya::WebsiteBlocker::apply({},false);
     const bool websiteRulesPresent=websiteApplied.success &&
@@ -74,16 +75,16 @@ int wmain() {
     store.removeEntry(L"applications",testPath);
     if(!store.addEntry(L"applications",testPath,L"long",L"simple")) {DeleteFileW(testPath.c_str());return 14;}
     auto applied=himaya::ExecutionPolicy::synchronize(store);
-    if(!applied.success || !registryContains(testPath)) {
+    if(!applied.success || !launchProbe(testPath,true)) {
         store.removeEntry(L"applications",testPath);
         himaya::ExecutionPolicy::synchronize(store);
         DeleteFileW(testPath.c_str());return 15;
     }
     if(!store.removeEntry(L"applications",testPath)) {DeleteFileW(testPath.c_str());return 16;}
     auto removed=himaya::ExecutionPolicy::synchronize(store);
-    const bool stillPresent=registryContains(testPath);
+    const bool allowedAgain=removed.success && launchProbe(testPath,false);
     DeleteFileW(testPath.c_str());
-    if(!removed.success || stillPresent) return 17;
+    if(!removed.success || !allowedAgain) return 17;
 
     const std::wstring folder=std::wstring(temp)+L"HimayaPolicySmokeFolder";
     const std::wstring child=folder+L"\\probe.txt";
