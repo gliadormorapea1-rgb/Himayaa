@@ -57,8 +57,17 @@ jobs:
             throw "Embedded DNS PowerShell syntax validation failed."
           }
           $scriptText = $match.Groups["script"].Value
-          if ($scriptText -notmatch "Get-AddressFamilyName" -or
-              $scriptText -notmatch "'\^\(2\|IPv4\|InterNetwork\)\        run: cmake -S . -B build -A x64
+          if ($scriptText.IndexOf("Get-AddressFamilyName") -lt 0 -or
+              $scriptText.IndexOf("'^(2|IPv4|InterNetwork)$'") -lt 0) {
+            throw "DNS address-family normalization is missing."
+          }
+          if ($scriptText -match 'Set-DnsClientServerAddress[^\r\n]*-AddressFamily') {
+            throw "Unsupported -AddressFamily parameter found on Set-DnsClientServerAddress."
+          }
+          Write-Host "Embedded DNS PowerShell parsed successfully; no live DNS settings were changed."
+
+      - name: Configure x64 Release
+        run: cmake -S . -B build -A x64
 
       - name: Build Release
         run: cmake --build build --config Release --parallel
