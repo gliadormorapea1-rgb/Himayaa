@@ -56,7 +56,24 @@ jobs:
         shell: pwsh
         run: |
           & ".\\build\\bin\\HimayaPolicySmokeTest.exe"
-          if ($LASTEXITCODE -ne 0) { throw "Windows AppLocker enforcement smoke test failed with exit code $LASTEXITCODE." }
+          $testExit = $LASTEXITCODE
+          if ($testExit -ne 0) {
+            Write-Host "===== Effective AppLocker policy ====="
+            try { Get-AppLockerPolicy -Effective -Xml | Out-String -Width 4096 | Write-Host } catch { Write-Host $_ }
+            Write-Host "===== AppLocker service state ====="
+            Get-Service AppIDSvc,AppLockerFltr -ErrorAction SilentlyContinue | Format-List Name,Status,StartType
+            foreach ($channel in @(
+              "Microsoft-Windows-AppLocker/EXE and DLL",
+              "Microsoft-Windows-AppLocker/MSI and Script"
+            )) {
+              Write-Host "===== Recent events: $channel ====="
+              try {
+                Get-WinEvent -FilterHashtable @{LogName=$channel; StartTime=(Get-Date).AddMinutes(-10)} -MaxEvents 40 -ErrorAction Stop |
+                  Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-List
+              } catch { Write-Host "Could not read channel: $_" }
+            }
+            throw "Windows AppLocker enforcement smoke test failed with exit code $testExit."
+          }
 
       - name: Test background Windows service startup
         shell: pwsh
