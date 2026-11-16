@@ -35,7 +35,7 @@ public:
     bool addEntry(const std::wstring& category, const std::wstring& value,
                   const std::wstring& lockMode, const std::wstring& profile);
     bool removeEntry(const std::wstring& category, const std::wstring& value);
-    bool hasPermanentStrictLock() const;
+    int permanentStrictLockStatus() const;
     bool setSetting(const std::wstring& key, const std::wstring& value);
     std::wstring getSetting(const std::wstring& key, const std::wstring& fallback = L"") const;
     bool logEvent(const std::wstring& eventType, const std::wstring& details);
