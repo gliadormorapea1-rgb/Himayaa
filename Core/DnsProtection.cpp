@@ -246,9 +246,9 @@ function Restore-Protection {
         $family = Get-AddressFamilyName $entry.AddressFamily
         if ($null -eq $family) { throw "Unknown saved address family '$($entry.AddressFamily)'." }
         if ($entry.Dhcp) {
-          Set-DnsClientServerAddress -InterfaceIndex $targetIndex -AddressFamily $family -ResetServerAddresses -ErrorAction Stop
+          Set-DnsClientServerAddress -InterfaceIndex $targetIndex -ResetServerAddresses -ErrorAction Stop
         } elseif (@($entry.Servers).Count -gt 0) {
-          Set-DnsClientServerAddress -InterfaceIndex $targetIndex -AddressFamily $family -ServerAddresses @($entry.Servers) -ErrorAction Stop
+          Set-DnsClientServerAddress -InterfaceIndex $targetIndex -ServerAddresses @($entry.Servers) -ErrorAction Stop
         } else {
           Set-DnsClientServerAddress -InterfaceIndex $targetIndex -AddressFamily $family -ResetServerAddresses -ErrorAction Stop
         }
