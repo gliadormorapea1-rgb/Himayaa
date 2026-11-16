@@ -13,6 +13,12 @@ struct Entry {
     std::wstring profile;
 };
 
+struct Event {
+    std::wstring timestamp;
+    std::wstring type;
+    std::wstring details;
+};
+
 class ConfigStore {
 public:
     ConfigStore();
@@ -32,6 +38,8 @@ public:
     bool setSetting(const std::wstring& key, const std::wstring& value);
     std::wstring getSetting(const std::wstring& key, const std::wstring& fallback = L"") const;
     bool logEvent(const std::wstring& eventType, const std::wstring& details);
+    std::vector<Event> loadRecentEvents(size_t limit = 5000) const;
+    bool exportEventsCsv(const std::wstring& path) const;
 
 private:
     bool initialize();
