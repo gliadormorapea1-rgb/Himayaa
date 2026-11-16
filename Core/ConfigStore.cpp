@@ -200,7 +200,7 @@ int ConfigStore::permanentStrictLockStatus() const {
     if (!db_) return -1;
     sqlite3_stmt* statement = nullptr;
     const char* sql = "SELECT 1 FROM entries WHERE profile='severe' "
-                      "AND category IN ('applications','websites') "
+                      "AND category IN ('applications','websites','social_sites') "
                       "AND expires_at IS NULL LIMIT 1";
     if (sqlite3_prepare_v2(db_, sql, -1, &statement, nullptr) != SQLITE_OK) return -1;
     const int step = sqlite3_step(statement);
