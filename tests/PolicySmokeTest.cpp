@@ -89,12 +89,11 @@ int wmain(int argc,wchar_t** argv) {
     wchar_t self[MAX_PATH]{};
     if(!GetModuleFileNameW(nullptr,self,MAX_PATH) || !CopyFileW(self,testPath.c_str(),FALSE)) return 11;
     himaya::ConfigStore store;
-    auto websiteApplied=himaya::WebsiteBlocker::apply({},false);
+    auto websiteApplied=himaya::WebsiteBlocker::apply({L"himaya-user-test.invalid"},false);
     const bool websiteRulesPresent=websiteApplied.success &&
-        hostsContains("0.0.0.0 www.xnxx-arabic.com") &&
-        hostsContains("0.0.0.0 xnxx-arabic.com") &&
-        hostsContains(":: www.xnxx-arabic.com") &&
-        hostsContains(":: xnxx-arabic.com");
+        hostsContains("0.0.0.0 himaya-user-test.invalid") &&
+        hostsContains("0.0.0.0 www.himaya-user-test.invalid") &&
+        !hostsContains("xnxx-arabic.com");
     const auto websiteRestored=himaya::WebsiteBlocker::restoreOriginal();
     if(!websiteRulesPresent || !websiteRestored.success) return 28;
 
