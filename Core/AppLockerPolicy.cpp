@@ -7,12 +7,9 @@
 namespace himaya {
 namespace {
 std::wstring quote(const std::wstring& value) {
-    std::wstring out=L"\\"";
-    for(wchar_t c:value) {
-        if(c==L'"') out+=L"\\\"";
-        else out+=c;
-    }
-    out+=L"\\"";
+    std::wstring out=L"\\\"";
+    out+=value;
+    out+=L"\\\"";
     return out;
 }
 bool writeUtf16(const std::wstring& path,const std::wstring& value) {
@@ -216,7 +213,7 @@ bool AppLockerPolicy::synchronize(const std::vector<AppLockerRule>& rules,
                                   std::wstring& error) {
     if(userSids.empty()) {
         error=L"No interactive user account is available yet; existing AppLocker rules were left unchanged.";
-        return false;
+        return true;
     }
     return runPolicyScript(rules,userSids,workingDirectory,false,error);
 }
