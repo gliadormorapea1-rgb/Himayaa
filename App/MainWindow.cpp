@@ -819,8 +819,8 @@ void MainWindow::applyWebsites() {
 void MainWindow::setAdultDnsProtection(bool enabled) {
     const int answer = MessageBoxW(hwnd_,
         enabled
-          ? L"Himaya will enable adult-content DNS filtering and block the entire YouTube, Instagram, Facebook, Snapchat, TikTok, Likee, Kwai, X, Reddit, Threads, Pinterest and Tumblr websites. Some of these sites use single-page navigation, so blocking only a Reels/Shorts URL can be bypassed when content changes inside the page. Full-site blocking is the reliable option. Rules apply to Edge, Chrome, Brave and Firefox and are re-synchronized by HimayaGuard. Original DNS and browser policies will be backed up. Continue?"
-          : L"Himaya will restore the DNS and browser policy settings saved before protection was enabled, including the social-platform blocks, and remove Himaya DNS firewall rules. Continue?",
+          ? L"Himaya will enable adult-content DNS filtering for adult websites. It will NOT block entire social websites such as YouTube, Instagram or Facebook. Shorts and Reels are controlled separately by the Himaya browser extension, so the rest of each website remains available. DNS and browser DNS-over-HTTPS settings will be backed up. Continue?"
+          : L"Himaya will restore the DNS and browser DNS-over-HTTPS settings saved before protection was enabled and remove Himaya DNS firewall rules. This does not change the separate Shorts/Reels browser-extension settings. Continue?",
         enabled ? L"Enable adult-content DNS protection" : L"Restore DNS settings",
         MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2);
     if(answer!=IDYES) return;
