@@ -58,6 +58,26 @@ jobs:
           & ".\\build\\bin\\HimayaPolicySmokeTest.exe"
           if ($LASTEXITCODE -ne 0) { throw "Windows SRP policy smoke test failed with exit code $LASTEXITCODE." }
 
+      - name: Test background Windows service startup
+        shell: pwsh
+        run: |
+          $serviceExe = (Resolve-Path ".\\build\\bin\\HimayaGuard.exe").Path
+          $binPath = '"' + $serviceExe + '"'
+          & sc.exe create HimayaGuard binPath= $binPath start= demand
+          if ($LASTEXITCODE -ne 0) { throw "Could not register HimayaGuard for the service smoke test." }
+          try {
+            & sc.exe start HimayaGuard
+            if ($LASTEXITCODE -ne 0) { throw "HimayaGuard failed to start." }
+            Start-Sleep -Seconds 3
+            $state = (& sc.exe query HimayaGuard) -join "`n"
+            if ($state -notmatch "RUNNING") { throw "HimayaGuard did not reach RUNNING state: $state" }
+          }
+          finally {
+            & sc.exe stop HimayaGuard | Out-Null
+            Start-Sleep -Seconds 2
+            & sc.exe delete HimayaGuard | Out-Null
+          }
+
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
 
