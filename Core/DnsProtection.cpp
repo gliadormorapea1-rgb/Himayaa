@@ -112,7 +112,7 @@ DnsProtectionResult run(const wchar_t* mode){
   const auto root=rootPath();if(root.empty())return {false,L"Could not access Himaya ProgramData."};
   const auto script=(std::filesystem::path(root)/L"DnsProtection.ps1").wstring();if(!writeScript(script))return {false,L"Could not write DNS protection script."};
   wchar_t sys[MAX_PATH]{};const UINT n=GetSystemDirectoryW(sys,MAX_PATH);if(!n||n>=MAX_PATH)return {false,L"Could not locate Windows PowerShell."};
-  std::wstring cmd=L"\\""+std::wstring(sys)+L"\\WindowsPowerShell\\v1.0\\powershell.exe\\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\""+script+L"\\" -Mode "+mode;
+  std::wstring cmd = L"\"" + std::wstring(sys) + L"\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + script + L"\" -Mode " + mode;
   STARTUPINFOW si{};si.cb=sizeof(si);PROCESS_INFORMATION pi{};std::vector<wchar_t> buf(cmd.begin(),cmd.end());buf.push_back(L'\0');
   if(!CreateProcessW(nullptr,buf.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&si,&pi))return {false,L"Could not start PowerShell."};
   const DWORD wait=WaitForSingleObject(pi.hProcess,90000);DWORD code=STILL_ACTIVE;const bool ok=wait==WAIT_OBJECT_0&&GetExitCodeProcess(pi.hProcess,&code);
