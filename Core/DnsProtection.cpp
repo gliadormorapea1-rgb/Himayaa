@@ -277,12 +277,10 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
   }
 
   $chromiumSocialBlocks = @(
-    'youtube.com/shorts',
-    'instagram.com/reels',
-    'instagram.com/reel',
-    'facebook.com/reel',
-    'facebook.com/reels',
-    'snapchat.com/spotlight',
+    'youtube.com',
+    'instagram.com',
+    'facebook.com',
+    'snapchat.com',
     'tiktok.com',
     'likee.video',
     'kwai.com'
@@ -293,18 +291,16 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
 
   $firefoxRoot = 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
   $firefoxSocialBlocks = @(
-    '*://*.youtube.com/shorts/*',
-    '*://*.instagram.com/reels/*',
-    '*://*.instagram.com/reel/*',
-    '*://*.facebook.com/reel/*',
-    '*://*.facebook.com/reels/*',
-    '*://*.snapchat.com/spotlight*',
+    '*://*.youtube.com/*',
+    '*://*.instagram.com/*',
+    '*://*.facebook.com/*',
+    '*://*.snapchat.com/*',
     '*://*.tiktok.com/*',
     '*://*.likee.video/*',
     '*://*.kwai.com/*'
   )
   Add-PolicyListValues (Join-Path $firefoxRoot 'WebsiteFilter\Block') $firefoxSocialBlocks
-  Write-Log 'Browser URL policies for short-form video feeds were applied to Edge, Chrome, Brave and Firefox.'
+  Write-Log 'Full-domain social platform blocks were applied to Edge, Chrome, Brave and Firefox to prevent single-page-app route bypasses.'
 
   if (-not (Get-NetFirewallRule -DisplayName $firewallNames[0] -ErrorAction SilentlyContinue)) {
     New-NetFirewallRule -DisplayName $firewallNames[0] -Direction Outbound -Action Block -Protocol TCP -RemotePort 853 -Profile Any -ErrorAction Stop | Out-Null
