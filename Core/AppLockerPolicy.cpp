@@ -243,10 +243,25 @@ try {
     }
     $doc.Save($PolicyFile)
     Set-AppLockerPolicy -XmlPolicy $PolicyFile -ErrorAction Stop
-    $converterPath = Join-Path (Join-Path $env:windir 'System32') 'appidpolicyconverter.exe'
-    if (-not (Test-Path -LiteralPath $converterPath)) { throw 'The Windows AppLocker policy converter is unavailable.' }
-    $converterProcess = Start-Process -FilePath $converterPath -Wait -PassThru -WindowStyle Hidden
-    if ($converterProcess.ExitCode -ne 0) { throw ('The AppLocker policy converter failed with exit code '+$converterProcess.ExitCode) }
+    $converterPath = '\Microsoft\Windows\AppID\'
+    $converterName = 'PolicyConverter'
+    $converter = Get-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop
+    $wasDisabled = $converter.State -eq 'Disabled'
+    if ($wasDisabled) { Enable-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop | Out-Null }
+    try {
+        $beforeRun = (Get-ScheduledTaskInfo -TaskPath $converterPath -TaskName $converterName).LastRunTime
+        Start-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop
+        $deadline = (Get-Date).AddSeconds(20)
+        do {
+            Start-Sleep -Milliseconds 250
+            $converter = Get-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop
+            $converterInfo = Get-ScheduledTaskInfo -TaskPath $converterPath -TaskName $converterName
+        } while (($converter.State -eq 'Running' -or $converterInfo.LastRunTime -le $beforeRun) -and (Get-Date) -lt $deadline)
+        if ($converter.State -eq 'Running' -or $converterInfo.LastRunTime -le $beforeRun) { throw 'The AppLocker policy converter task did not complete.' }
+        if ($converterInfo.LastTaskResult -ne 0) { throw ('The AppLocker policy converter task failed with result '+$converterInfo.LastTaskResult) }
+    } finally {
+        if ($wasDisabled) { Disable-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop | Out-Null }
+    }
     if (-not $RestoreOnly) {
         $effectivePolicy = Get-AppLockerPolicy -Effective -ErrorAction Stop
         foreach ($item in $requested) {
