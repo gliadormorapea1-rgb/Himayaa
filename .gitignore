@@ -1,1 +1,33 @@
-build/\n.vs/\n
+# Build outputs
+/build/
+/out/
+/.vs/
+/.idea/
+/.cache/
+
+# Visual Studio / CMake user state
+*.user
+*.suo
+*.VC.db
+*.VC.VC.opendb
+CMakeUserPresets.json
+
+# Installer output
+/Installer/Output/
+
+# Runtime data, logs, backups and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.old
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
