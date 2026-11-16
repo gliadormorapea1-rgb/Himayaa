@@ -42,6 +42,23 @@ jobs:
           }
           Write-Host "Canonical source validated at $sourceDir"
 
+      - name: Inspect canonical source for implementation work
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: pwsh
+        run: |
+          $root = "source/Himaya-0.3.1"
+          $files = @("CMakeLists.txt","App/main.cpp","App/MainWindow.h","App/MainWindow.cpp","Core/ConfigStore.h","Core/ConfigStore.cpp","Core/WebsiteBlocker.h","Core/WebsiteBlocker.cpp","Installer/Himaya.iss")
+          foreach ($relative in $files) {
+            $path = Join-Path $root $relative
+            if (Test-Path $path) {
+              $bytes = [System.IO.File]::ReadAllBytes($path)
+              $encoded = [Convert]::ToBase64String($bytes)
+              Write-Host "HIMAYA_SOURCE_BEGIN:$relative"
+              Write-Host $encoded
+              Write-Host "HIMAYA_SOURCE_END:$relative"
+            }
+          }
+
       - name: Configure x64 Release
         working-directory: source/Himaya-0.3.1
         run: cmake -S . -B build -A x64
