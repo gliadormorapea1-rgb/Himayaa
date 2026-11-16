@@ -1,5 +1,5 @@
 #define MyAppName "Himaya Security"
-#define MyAppVersion "0.4.0"
+#define MyAppVersion "0.5.0"
 #define MyAppPublisher "Himaya Project"
 #define MyAppExeName "Himaya.exe"
 
@@ -19,7 +19,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 CloseApplications=yes
 
 [Dirs]
-Name: "{commonappdata}\Himaya"; Permissions: users-modify
+Name: "{commonappdata}\Himaya"; Permissions: admins-full system-full
 
 [Files]
 Source: "..\build\bin\Himaya.exe"; DestDir: "{app}"; Flags: ignoreversion
