@@ -198,8 +198,56 @@ constexpr wchar_t kScriptPart2[] = LR"PS(function Backup-Settings {
 }
 
 )PS";
-constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
+constexpr wchar_t kScriptPart3[] = LR"PS(function Remove-LegacySocialBlocks {
+  # Remove only the exact full-domain entries added by older Himaya releases.
+  # Existing entries found in the pre-Himaya policy backup are deliberately retained.
+  $chromiumValues = @(
+    'youtube.com','instagram.com','facebook.com','snapchat.com','tiktok.com',
+    'likee.video','kwai.com','x.com','twitter.com','reddit.com','threads.net',
+    'pinterest.com','tumblr.com'
+  )
+  $firefoxValues = @(
+    '*://*.youtube.com/*','*://*.instagram.com/*','*://*.facebook.com/*',
+    '*://*.snapchat.com/*','*://*.tiktok.com/*','*://*.likee.video/*',
+    '*://*.kwai.com/*','*://*.x.com/*','*://*.twitter.com/*',
+    '*://*.reddit.com/*','*://*.threads.net/*','*://*.pinterest.com/*',
+    '*://*.tumblr.com/*'
+  )
+  $targets = @(
+    @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge\URLBlocklist'; Backup='policy-0.reg'; Values=$chromiumValues },
+    @{ Path='HKLM:\SOFTWARE\Policies\Google\Chrome\URLBlocklist'; Backup='policy-1.reg'; Values=$chromiumValues },
+    @{ Path='HKLM:\SOFTWARE\Policies\BraveSoftware\Brave\URLBlocklist'; Backup='policy-3.reg'; Values=$chromiumValues },
+    @{ Path='HKLM:\SOFTWARE\Policies\Mozilla\Firefox\WebsiteFilter\Block'; Backup='policy-2.reg'; Values=$firefoxValues }
+  )
+  $removed = 0
+  foreach ($target in $targets) {
+    if (-not (Test-Path -LiteralPath $target.Path)) { continue }
+    $backupPath = Join-Path $root $target.Backup
+    $backupText = ''
+    if (Test-Path -LiteralPath $backupPath) {
+      $backupText = Get-Content -LiteralPath $backupPath -Raw -ErrorAction Stop
+    }
+    $properties = Get-ItemProperty -LiteralPath $target.Path -ErrorAction Stop
+    foreach ($property in @($properties.PSObject.Properties)) {
+      if ($property.Name -like 'PS*') { continue }
+      $value = [string]$property.Value
+      if ($target.Values -notcontains $value) { continue }
+      $wasPresentBeforeHimaya = $false
+      if (-not [string]::IsNullOrEmpty($backupText)) {
+        $wasPresentBeforeHimaya = $backupText.IndexOf(('="' + $value + '"'), [StringComparison]::OrdinalIgnoreCase) -ge 0
+      }
+      if (-not $wasPresentBeforeHimaya) {
+        Remove-ItemProperty -LiteralPath $target.Path -Name $property.Name -ErrorAction Stop
+        $removed++
+      }
+    }
+  }
+  Write-Log "Removed $removed legacy full-domain social-platform URL block entries; unrelated browser policy values were preserved."
+}
+
+function Apply-Protection {
   Backup-Settings
+  Remove-LegacySocialBlocks
   $configuredIPv4 = 0
   $configuredIPv6 = 0
   $activeIPv4Failures = @()
@@ -261,59 +309,8 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
   New-ItemProperty $firefox -Name Enabled -PropertyType DWord -Value 0 -Force -ErrorAction Stop | Out-Null
   New-ItemProperty $firefox -Name Locked -PropertyType DWord -Value 1 -Force -ErrorAction Stop | Out-Null
 
-  # Apply managed browser URL policies for short-form video feeds.
-  # Existing policy values are preserved; Himaya adds only missing patterns.
-  function Add-PolicyListValues {
-    param([string]$Path, [string[]]$Patterns)
-    New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
-    foreach ($pattern in $Patterns) {
-      $properties = Get-ItemProperty -LiteralPath $Path -ErrorAction Stop
-      $values = @($properties.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { [string]$_.Value })
-      if ($values -contains $pattern) { continue }
-      $slot = 1
-      while ($null -ne $properties.PSObject.Properties[[string]$slot]) { $slot++ }
-      New-ItemProperty -LiteralPath $Path -Name ([string]$slot) -PropertyType String -Value $pattern -Force -ErrorAction Stop | Out-Null
-    }
-  }
-
-  $chromiumSocialBlocks = @(
-    'youtube.com',
-    'instagram.com',
-    'facebook.com',
-    'snapchat.com',
-    'tiktok.com',
-    'likee.video',
-    'kwai.com',
-    'x.com',
-    'twitter.com',
-    'reddit.com',
-    'threads.net',
-    'pinterest.com',
-    'tumblr.com'
-  )
-  Add-PolicyListValues (Join-Path $edge 'URLBlocklist') $chromiumSocialBlocks
-  Add-PolicyListValues (Join-Path $chrome 'URLBlocklist') $chromiumSocialBlocks
-  Add-PolicyListValues (Join-Path $brave 'URLBlocklist') $chromiumSocialBlocks
-
-  $firefoxRoot = 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
-  $firefoxSocialBlocks = @(
-    '*://*.youtube.com/*',
-    '*://*.instagram.com/*',
-    '*://*.facebook.com/*',
-    '*://*.snapchat.com/*',
-    '*://*.tiktok.com/*',
-    '*://*.likee.video/*',
-    '*://*.kwai.com/*',
-    '*://*.x.com/*',
-    '*://*.twitter.com/*',
-    '*://*.reddit.com/*',
-    '*://*.threads.net/*',
-    '*://*.pinterest.com/*',
-    '*://*.tumblr.com/*'
-  )
-  New-Item -Path (Join-Path $firefoxRoot 'WebsiteFilter') -Force -ErrorAction Stop | Out-Null
-  Add-PolicyListValues (Join-Path $firefoxRoot 'WebsiteFilter\Block') $firefoxSocialBlocks
-  Write-Log 'Full-domain social platform blocks were applied to Edge, Chrome, Brave and Firefox to prevent single-page-app route bypasses.'
+  # Full-site social-platform URL blocks were removed. Shorts/Reels route blocking
+  # is handled exclusively by the Himaya browser extension.
 
   if (-not (Get-NetFirewallRule -DisplayName $firewallNames[0] -ErrorAction SilentlyContinue)) {
     New-NetFirewallRule -DisplayName $firewallNames[0] -Direction Outbound -Action Block -Protocol TCP -RemotePort 853 -Profile Any -ErrorAction Stop | Out-Null
@@ -446,6 +443,8 @@ Write-Log "Starting DNS protection mode '$Mode'."
 try {
   if ($Mode -eq 'Restore') {
     Restore-Protection
+  } elseif ($Mode -eq 'RemoveSocialBlocks') {
+    Remove-LegacySocialBlocks
   } else {
     Apply-Protection
   }
@@ -458,7 +457,7 @@ try {
     $details = $failure | Format-List * -Force | Out-String
     Add-Content -LiteralPath $logFile -Value $details -Encoding UTF8 -ErrorAction Stop
   } catch {}
-  if ($Mode -ne 'Restore' -and (Test-Path -LiteralPath $backupFile)) {
+  if (($Mode -eq 'Enable' -or $Mode -eq 'Sync') -and (Test-Path -LiteralPath $backupFile)) {
     $rollbackAllowed = $false
     try {
       $rollbackBackup = Get-Content -LiteralPath $backupFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
@@ -536,9 +535,12 @@ DnsProtectionResult run(const wchar_t* mode){
     const auto log=(std::filesystem::path(root)/L"Logs"/L"DnsProtection.log").wstring();
     return {false,L"DNS protection failed (PowerShell exit code "+std::to_wstring(ok?code:ERROR_GEN_FAILURE)+L"). Diagnostic log: "+log};
   }
-  return {true,std::wstring(mode)==L"Restore"
+  const std::wstring selectedMode(mode);
+  return {true,selectedMode==L"Restore"
     ?L"Original DNS and browser policy settings restored; Himaya DNS firewall rules removed."
-    :L"CleanBrowsing Family DNS, managed social-platform blocks, browser DNS policies and DNS firewall protections applied."};
+    :selectedMode==L"RemoveSocialBlocks"
+      ?L"Legacy full-site social-platform blocks were removed. Adult-content DNS filtering and other browser policies were left unchanged."
+      :L"CleanBrowsing Family DNS, browser DNS policies and DNS firewall protections applied. Social websites remain available; Shorts/Reels are handled by the browser extension."};
 }
 }
 DnsProtectionResult DnsProtection::enable(){return run(L"Enable");}
