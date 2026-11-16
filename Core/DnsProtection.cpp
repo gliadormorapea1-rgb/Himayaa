@@ -169,7 +169,7 @@ constexpr wchar_t kScriptPart2[] = LR"PS(function Backup-Settings {
       # state, and reg.exe query writes an error to stderr for that case.
       # In Windows PowerShell 5.1, native stderr can become a terminating
       # NativeCommandError when ErrorActionPreference is Stop.
-      $registryPath = 'HKLM:\\' + $policy.Key.Substring(5)
+      $registryPath = 'HKLM:\' + $policy.Key.Substring(5)
       if (Test-Path -LiteralPath $registryPath) {
         # Merge native stderr into the success stream so exit-code handling
         # remains deterministic under Windows PowerShell 5.1.
