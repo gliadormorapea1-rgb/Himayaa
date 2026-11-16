@@ -250,7 +250,7 @@ void MainWindow::addEntry() {
             return;
         }
         const int answer=MessageBoxW(hwnd_,
-            L"سيمنع Himaya حسابات مستخدمي Windows من فتح هذا المجلد ومحتوياته، وليس تشغيل الملفات فقط. سيحفظ صلاحيات المجلد الأصلية ويعيدها عند حذف القاعدة أو إيقاف خدمة الحماية. لا تختَر مجلدات النظام أو جذر القرص أو مجلد المستخدم الرئيسي. هل تريد المتابعة؟",
+            L"Himaya will deny Windows user accounts access to this folder and its contents, not just prevent files from running. The original folder permissions will be saved and restored when the rule is removed or the protection service stops. Do not select Windows system folders, a drive root, or your main user folder. Continue?",
             L"Confirm folder access restriction",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2);
         if(answer!=IDYES) return;
     }
@@ -284,7 +284,7 @@ void MainWindow::applyWebsites() {
     const auto result=himaya::WebsiteBlocker::apply(domains,store_.getSetting(L"adult_block_mode",L"all")==L"all");
     if(result.success) store_.logEvent(L"websites_applied",std::to_wstring(result.blockedDomains));
     std::wstring message=result.message;
-    if(result.success && result.blockedDomains) message+=L"\nعدد النطاقات: "+std::to_wstring(result.blockedDomains);
+    if(result.success && result.blockedDomains) message+=L"\nDomains blocked: "+std::to_wstring(result.blockedDomains);
     setStatus(message);
     MessageBoxW(hwnd_,message.c_str(),L"Himaya Security",MB_OK|(result.success?MB_ICONINFORMATION:MB_ICONERROR));
 }
