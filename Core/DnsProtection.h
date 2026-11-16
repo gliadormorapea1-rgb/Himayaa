@@ -7,5 +7,6 @@ public:
     static DnsProtectionResult enable();
     static DnsProtectionResult synchronize();
     static DnsProtectionResult restore();
+    static DnsProtectionResult removeSocialPlatformBlocks();
 };
 }
