@@ -17,8 +17,12 @@ bool registryContains(const std::wstring& expected) {
         HKEY child=nullptr;
         if(RegOpenKeyExW(key,name,0,KEY_QUERY_VALUE|KEY_WOW64_64KEY,&child)==ERROR_SUCCESS) {
             wchar_t value[32768]{};DWORD bytes=sizeof(value),type=0;
+            DWORD level=0,levelBytes=sizeof(level),levelType=0;
+            const bool disallowed=RegQueryValueExW(child,L"Level",nullptr,&levelType,
+                reinterpret_cast<BYTE*>(&level),&levelBytes)==ERROR_SUCCESS &&
+                levelType==REG_DWORD && level==0x00000000;
             if(RegQueryValueExW(child,L"ItemData",nullptr,&type,reinterpret_cast<BYTE*>(value),&bytes)==ERROR_SUCCESS &&
-               type==REG_SZ && _wcsicmp(value,expected.c_str())==0) found=true;
+               type==REG_SZ && _wcsicmp(value,expected.c_str())==0 && disallowed) found=true;
             RegCloseKey(child);
         }
         if(found) break;
