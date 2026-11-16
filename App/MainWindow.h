@@ -24,6 +24,7 @@ private:
     void exportReport();
     std::wstring selectedCategory() const;
     std::wstring selectedDuration() const;
+    std::wstring selectedReelsDuration() const;
     std::wstring selectedProfile() const;
     void setStatus(const std::wstring& value);
     void setPage(int page);
@@ -46,7 +47,8 @@ private:
     HWND refreshButton_{}, reportButton_{}, addButton_{}, removeButton_{};
     HWND protectionDescription_{}, statsSummary_{}, settingsDescription_{}, themeToggle_{};
     HWND healthSummary_{}, healthRefresh_{};
-    HWND reelsModeLabel_{}, reelsMode_{}, reelsDurationLabel_{}, reelsDuration_{}, reelsSitesLabel_{}, reelsSites_{}, reelsEnable_{}, reelsStop_{}, reelsStatus_{}, navReels_{};
+    HWND reelsModeLabel_{}, reelsMode_{}, reelsDurationLabel_{}, reelsDuration_{}, reelsDateLabel_{}, reelsDate_{}, reelsSitesLabel_{}, reelsSites_{}, reelsEnable_{}, reelsStop_{}, reelsStatus_{}, navReels_{}, navSocial_{};
+    HWND durationDateLabel_{}, durationDate_{};
     HWND dashboardApps_{}, dashboardWebsites_{}, dashboardFolders_{}, dashboardDns_{};
     HWND navDashboard_{}, navApplications_{}, navWebsites_{}, navProtection_{}, navLogs_{}, navStatistics_{}, navSettings_{};
     std::vector<HWND> managementControls_, dashboardControls_, protectionControls_, statisticsControls_, settingsControls_, healthControls_, reelsControls_;
