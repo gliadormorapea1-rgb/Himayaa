@@ -8,6 +8,7 @@
 
 namespace himaya {
 namespace {
+// Keep each embedded PowerShell literal below MSVC\x27s per-literal size limit.
 constexpr wchar_t kScriptPart1[] = LR"PS(
 param([ValidateSet('Enable','Sync','Restore')][string]$Mode)
 $ErrorActionPreference = 'Stop'
