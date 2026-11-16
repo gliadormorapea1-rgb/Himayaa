@@ -96,14 +96,14 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
 
         makeControl(hwnd_, L"STATIC", L"Application lock duration", SS_LEFT, 530,145,170,24,0,instance_);
         duration_ = makeControl(hwnd_, WC_COMBOBOXW, L"", CBS_DROPDOWNLIST|WS_VSCROLL, 530,172,230,220,ID_DURATION,instance_);
-        SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"2 minutes — test")); 
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Long-term — no automatic expiry"));
+        SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"2 minutes — test"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"1 hour"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"24 hours"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"7 days"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"30 days"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"90 days"));
-        SendMessageW(duration_, CB_SETCURSEL, 1, 0);
+        SendMessageW(duration_, CB_SETCURSEL, 0, 0);
 
         input_ = makeControl(hwnd_, L"EDIT", L"", WS_BORDER|ES_AUTOHSCROLL, 30,220,610,36,ID_INPUT,instance_);
         browse_ = makeControl(hwnd_, L"BUTTON", L"Browse...", BS_PUSHBUTTON, 650,220,130,36,ID_BROWSE,instance_);
@@ -186,7 +186,7 @@ std::wstring MainWindow::selectedCategory() const {
 
 std::wstring MainWindow::selectedDuration() const {
     const LRESULT index = SendMessageW(duration_, CB_GETCURSEL, 0, 0);
-    switch (index) { case 0: return L"2m"; case 2: return L"1h"; case 3: return L"24h"; case 4: return L"7d"; case 5: return L"30d"; case 6: return L"90d"; default: return L"long"; }
+    switch (index) { case 1: return L"2m"; case 2: return L"1h"; case 3: return L"24h"; case 4: return L"7d"; case 5: return L"30d"; case 6: return L"90d"; default: return L"long"; }
 }
 
 std::wstring MainWindow::selectedProfile() const {
@@ -291,7 +291,7 @@ void MainWindow::addEntry() {
     const auto duration = (category == L"applications" || category == L"websites") ? selectedDuration() : L"long";
     if (store_.addEntry(category, value, duration, selectedProfile())) {
         SetWindowTextW(input_, L""); refreshList();
-        setStatus(category == L"websites" ? L"Website saved. Click Apply website blocking to activate the rules with administrator privileges." :
+        setStatus(category == L"websites" ? L"Website saved. HimayaGuard will synchronize the website block automatically; you can also apply it now." :
             category == L"paths" ? L"Folder saved. The service will restrict access and file execution, while preserving the original permissions for restoration." :
             L"Application saved. HimayaGuard will automatically enforce the execution block.");
     } else {
