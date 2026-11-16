@@ -166,16 +166,16 @@ void MainWindow::layoutControls() {
     move(dashboardDns_,x+cardW+gap+16,cardY+cardH+gap+16,cardW-32,cardH-32);
 
     const int col=(contentW-36)/3, rowY=145;
-    move(categoryLabel_,x,rowY, col,22); move(category_,x,rowY+26,col,34);
-    move(profileLabel_,x+col+18,rowY,col,22); move(profile_,x+col+18,rowY+26,col,34);
-    move(durationLabel_,x+2*(col+18),rowY,col,22); move(duration_,x+2*(col+18),rowY+26,col,34);
+    move(categoryLabel_,x,rowY, col,22); move(category_,x,rowY+26,col,180);
+    move(profileLabel_,x+col+18,rowY,col,22); move(profile_,x+col+18,rowY+26,col,180);
+    move(durationLabel_,x+2*(col+18),rowY,col,22); move(duration_,x+2*(col+18),rowY+26,col,180);
     move(durationDateLabel_,x+2*(col+18),rowY+66,col,20); move(durationDate_,x+2*(col+18),rowY+86,col,32);
-    move(inputLabel_,x,238,contentW,22);
+    move(inputLabel_,x,274,contentW,22);
     const int browseW=132, addW=150;
-    move(input_,x,266,contentW-browseW-addW-20,38);
-    move(browse_,x+contentW-browseW-addW-14,266,browseW,38);
-    move(addButton_,x+contentW-addW,266,addW,38);
-    move(list_,x,322,contentW,std::max(170,height-532));
+    move(input_,x,302,contentW-browseW-addW-20,38);
+    move(browse_,x+contentW-browseW-addW-14,302,browseW,38);
+    move(addButton_,x+contentW-addW,302,addW,38);
+    move(list_,x,358,contentW,std::max(170,height-568));
     const int actionY=height-142;
     move(removeButton_,x,actionY,180,38);
     move(refreshButton_,x+194,actionY,140,38);
@@ -194,7 +194,7 @@ void MainWindow::layoutControls() {
     move(healthSummary_,x,150,contentW,430);
     move(healthRefresh_,x,600,180,42);
     move(reelsModeLabel_,x,150,contentW/2-12,22); move(reelsMode_,x,178,contentW/2-12,170);
-    move(reelsDurationLabel_,x+contentW/2+12,150,contentW/2-12,22); move(reelsDuration_,x+contentW/2+12,178,contentW/2-12,34);
+    move(reelsDurationLabel_,x+contentW/2+12,150,contentW/2-12,22); move(reelsDuration_,x+contentW/2+12,178,contentW/2-12,180);
     move(reelsDateLabel_,x+contentW/2+12,220,contentW/2-12,20); move(reelsDate_,x+contentW/2+12,242,contentW/2-12,32);
     move(reelsSitesLabel_,x,292,contentW,22); move(reelsSites_,x,320,contentW,38);
     move(reelsEnable_,x,380,220,42); move(reelsStop_,x+238,380,220,42); move(reelsStatus_,x,450,contentW,160);
@@ -215,8 +215,14 @@ void MainWindow::setPage(int page) {
     show(settingsControls_,currentPage_==6);
     show(healthControls_,currentPage_==7);
     show(reelsControls_,currentPage_==8);
+    const bool showReelsDate=currentPage_==8 && SendMessageW(reelsDuration_,CB_GETCURSEL,0,0)==4;
+    if(reelsDateLabel_) ShowWindow(reelsDateLabel_,showReelsDate?SW_SHOW:SW_HIDE);
+    if(reelsDate_) ShowWindow(reelsDate_,showReelsDate?SW_SHOW:SW_HIDE);
     if (currentPage_==1 || currentPage_==2 || currentPage_==9) {
         show(managementControls_,true);
+        const bool showCustomDate=SendMessageW(duration_,CB_GETCURSEL,0,0)==4;
+        if(durationDateLabel_) ShowWindow(durationDateLabel_,showCustomDate?SW_SHOW:SW_HIDE);
+        if(durationDate_) ShowWindow(durationDate_,showCustomDate?SW_SHOW:SW_HIDE);
         if(profileLabel_) ShowWindow(profileLabel_,SW_SHOW);
         if(profile_) ShowWindow(profile_,SW_SHOW);
         SendMessageW(category_,CB_SETCURSEL,currentPage_==9?3:(currentPage_==2?1:0),0);
@@ -479,19 +485,19 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         addGroup(dashboardControls_,dashboardFolders_); addGroup(dashboardControls_,dashboardDns_);
 
         categoryLabel_=makeControl(hwnd_,L"STATIC",L"List type",SS_LEFT,0,0,180,22,0,instance_);
-        category_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,0,0,200,180,ID_CATEGORY,instance_);
+        category_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,0,0,200,180,ID_CATEGORY,instance_);
         SendMessageW(category_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Applications"));
         SendMessageW(category_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Websites"));
         SendMessageW(category_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Folders"));
         SendMessageW(category_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Social platforms"));
         SendMessageW(category_,CB_SETCURSEL,0,0);
         profileLabel_=makeControl(hwnd_,L"STATIC",L"Protection profile",SS_LEFT,0,0,180,22,0,instance_);
-        profile_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,0,0,200,180,ID_PROFILE,instance_);
+        profile_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,0,0,200,180,ID_PROFILE,instance_);
         SendMessageW(profile_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Basic"));
         SendMessageW(profile_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Strict"));
         SendMessageW(profile_,CB_SETCURSEL,store_.getSetting(L"active_profile",L"simple")==L"severe"?1:0,0);
         durationLabel_=makeControl(hwnd_,L"STATIC",L"Application lock duration",SS_LEFT,0,0,220,22,0,instance_);
-        duration_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,0,0,220,180,ID_DURATION,instance_);
+        duration_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,0,0,220,180,ID_DURATION,instance_);
         const wchar_t* durations[]={L"1 day",L"1 week",L"1 month",L"1 year",L"Specific date and time",L"Forever — no automatic expiry"};
         for(const auto* duration:durations) SendMessageW(duration_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(duration));
         SendMessageW(duration_,CB_SETCURSEL,5,0);
@@ -518,12 +524,12 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         healthSummary_=makeControl(hwnd_,L"STATIC",L"Select Refresh to inspect protection health.",SS_LEFT,0,0,760,430,0,instance_);
         healthRefresh_=makeControl(hwnd_,L"BUTTON",L"Refresh health",BS_PUSHBUTTON,0,0,180,42,ID_REFRESH_HEALTH,instance_);
         reelsModeLabel_=makeControl(hwnd_,L"STATIC",L"Session mode",SS_LEFT,0,0,240,22,0,instance_);
-        reelsMode_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,0,0,240,160,ID_REELS_MODE,instance_);
+        reelsMode_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,0,0,240,160,ID_REELS_MODE,instance_);
         SendMessageW(reelsMode_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Basic — can stop early"));
         SendMessageW(reelsMode_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Strict — no early stop in Himaya"));
         SendMessageW(reelsMode_,CB_SETCURSEL,0,0);
         reelsDurationLabel_=makeControl(hwnd_,L"STATIC",L"Session duration",SS_LEFT,0,0,240,22,0,instance_);
-        reelsDuration_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,0,0,240,160,ID_REELS_DURATION,instance_);
+        reelsDuration_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,0,0,240,160,ID_REELS_DURATION,instance_);
         const wchar_t* reelsDurations[]={L"1 day",L"1 week",L"1 month",L"1 year",L"Specific date and time",L"Forever"};
         for(const auto* value:reelsDurations) SendMessageW(reelsDuration_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(value));
         SendMessageW(reelsDuration_,CB_SETCURSEL,0,0);
@@ -596,6 +602,20 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         case ID_THEME: toggleTheme(); return 0;
         case ID_REFRESH_HEALTH: refreshHealth(); return 0;
         case ID_CATEGORY: if(HIWORD(wp)==CBN_SELCHANGE) refreshList(); return 0;
+        case ID_DURATION:
+            if(HIWORD(wp)==CBN_SELCHANGE) {
+                const bool custom=SendMessageW(duration_,CB_GETCURSEL,0,0)==4;
+                ShowWindow(durationDateLabel_,custom?SW_SHOW:SW_HIDE);
+                ShowWindow(durationDate_,custom?SW_SHOW:SW_HIDE);
+            }
+            return 0;
+        case ID_REELS_DURATION:
+            if(HIWORD(wp)==CBN_SELCHANGE) {
+                const bool custom=SendMessageW(reelsDuration_,CB_GETCURSEL,0,0)==4;
+                ShowWindow(reelsDateLabel_,custom?SW_SHOW:SW_HIDE);
+                ShowWindow(reelsDate_,custom?SW_SHOW:SW_HIDE);
+            }
+            return 0;
         case ID_PROFILE: if(HIWORD(wp)==CBN_SELCHANGE) saveProfile(); return 0;
         case ID_ADD: addEntry(); return 0;
         case ID_BROWSE: browseEntry(); return 0;
