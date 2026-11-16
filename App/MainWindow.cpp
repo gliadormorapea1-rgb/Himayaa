@@ -109,11 +109,11 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         makeControl(hwnd_, L"BUTTON", L"Remove selected", BS_PUSHBUTTON, 30,590,220,36,ID_REMOVE,instance_);
         makeControl(hwnd_, L"BUTTON", L"Refresh list", BS_PUSHBUTTON, 265,590,140,36,ID_REFRESH,instance_);
         makeControl(hwnd_, L"BUTTON", L"Export activity log (CSV)", BS_PUSHBUTTON, 420,590,220,36,ID_REPORT,instance_);
-        applySites_ = makeControl(hwnd_, L"BUTTON", L"Apply adult and custom website blocking", BS_PUSHBUTTON, 30,640,360,38,ID_APPLY_SITES,instance_);
-        restoreSites_ = makeControl(hwnd_, L"BUTTON", L"Restore website settings", BS_PUSHBUTTON, 405,640,260,38,ID_RESTORE_SITES,instance_);
+        applySites_ = makeControl(hwnd_, L"BUTTON", L"Apply custom website rules (Hosts)", BS_PUSHBUTTON, 30,640,360,38,ID_APPLY_SITES,instance_);
+        restoreSites_ = makeControl(hwnd_, L"BUTTON", L"Restore custom website rules", BS_PUSHBUTTON, 405,640,260,38,ID_RESTORE_SITES,instance_);
         restoreOriginalHosts_ = makeControl(hwnd_, L"BUTTON", L"Restore original hosts file", BS_PUSHBUTTON, 680,640,310,38,ID_RESTORE_ORIGINAL_HOSTS,instance_);
         summary_ = makeControl(hwnd_, L"STATIC", L"Database: Loading...", SS_LEFT, 30,690,960,26,0,instance_);
-        status_ = makeControl(hwnd_, L"STATIC", L"Website blocking uses the Windows hosts file. HimayaGuard enforces AppLocker application rules and folder access restrictions.", SS_LEFT, 30,725,960,40,0,instance_);
+        status_ = makeControl(hwnd_, L"STATIC", L"Custom website rules use the Windows hosts file. Adult-content filtering is configured separately through DNS protection.", SS_LEFT, 30,725,960,40,0,instance_);
         EnumChildWindows(hwnd_, [](HWND child, LPARAM font) -> BOOL {
             SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
             SetWindowTheme(child,L"DarkMode_Explorer",nullptr);
@@ -294,12 +294,12 @@ void MainWindow::removeEntry() {
 void MainWindow::applyWebsites() {
     if (selectedCategory() != L"websites") return;
     const int answer = MessageBoxW(hwnd_,
-        L"The Windows hosts file will be updated with the community adult-domain list and your custom websites. The list may not include every website, and DNS or VPN tools may bypass it. Continue?",
-        L"Confirm website blocking", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+        L"Only websites you added to Himaya will be written to the managed Hosts section. Adult-content filtering is handled separately. Continue?",
+        L"Confirm custom website blocking", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
     if (answer != IDYES) return;
     std::vector<std::wstring> domains;
     for(const auto& entry:store_.load(L"websites")) domains.push_back(entry.value);
-    const auto result=himaya::WebsiteBlocker::apply(domains,store_.getSetting(L"adult_block_mode",L"all")==L"all");
+    const auto result=himaya::WebsiteBlocker::apply(domains,false);
     if(result.success) store_.logEvent(L"websites_applied",std::to_wstring(result.blockedDomains));
     std::wstring message=result.message;
     if(result.success && result.blockedDomains) message+=L"\nDomains blocked: "+std::to_wstring(result.blockedDomains);
