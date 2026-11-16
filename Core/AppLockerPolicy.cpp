@@ -329,8 +329,17 @@ try {
             $converter = Get-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop
             $converterInfo = Get-ScheduledTaskInfo -TaskPath $converterPath -TaskName $converterName
         } while (($converter.State -eq 'Running' -or $converterInfo.LastRunTime -le $beforeRun) -and (Get-Date) -lt $deadline)
-        if ($converter.State -eq 'Running' -or $converterInfo.LastRunTime -le $beforeRun) { throw 'The AppLocker policy converter task did not complete.' }
-        if ($converterInfo.LastTaskResult -ne 0) { throw ('The AppLocker policy converter task failed with result '+$converterInfo.LastTaskResult) }
+        if ($converter.State -eq 'Running' -or $converterInfo.LastRunTime -le $beforeRun) {
+            throw ('The AppLocker policy converter task did not complete. State='+
+                $converter.State+'; PreviousLastRunTime='+$beforeRun.ToString('o')+
+                '; CurrentLastRunTime='+$converterInfo.LastRunTime.ToString('o')+
+                '; LastTaskResult='+$converterInfo.LastTaskResult)
+        }
+        if ($converterInfo.LastTaskResult -ne 0) {
+            throw ('The AppLocker policy converter task failed. State='+$converter.State+
+                '; LastRunTime='+$converterInfo.LastRunTime.ToString('o')+
+                '; LastTaskResult='+$converterInfo.LastTaskResult)
+        }
     } finally {
         if ($wasDisabled) { Disable-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop | Out-Null }
     }
