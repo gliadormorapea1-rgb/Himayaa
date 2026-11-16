@@ -314,7 +314,7 @@ bool WebsiteBlocker::isAdministrator() {
     return isAdmin == TRUE;
 }
 
-WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDomains, bool includeAdultFeed) {
+WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDomains, bool /*includeAdultFeed*/) {
     if (!isAdministrator()) return {false, 0, L"Administrator privileges are required to apply website blocking."};
     std::set<std::wstring> domains;
     for (const auto& value : userDomains) {
@@ -328,19 +328,6 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
         } else {
             domains.insert(domain);
             domains.insert(L"www." + domain);
-        }
-    }
-    // This explicitly requested site is always blocked, independently of the
-    // optional community adult-list setting or its network availability.
-    domains.insert(L"xnxx-arabic.com");
-    domains.insert(L"www.xnxx-arabic.com");
-
-    std::wstring feedWarning;
-    if (includeAdultFeed) {
-        // The online feed is an additional source; its failure must not prevent
-        // built-in domains and user-managed rules from being applied.
-        if (!downloadAdultFeed(domains, feedWarning)) {
-            // Continue with the built-in and user-provided domains.
         }
     }
     if (domains.empty()) return {false, 0, L"There are no valid websites to block."};
@@ -361,25 +348,17 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
     (void)hadManagedBlock;
     if (!updated.empty() && updated.back() != L'\n') updated += L"\r\n";
     updated += kBegin; updated += L"\r\n";
-    updated += L"# Adult-domain list: StevenBlack/hosts (porn extension) + user rules\r\n";
+    updated += L"# Himaya user-managed website rules\r\n";
     for (const auto& domain : domains) {
         // Write each exact hostname once; www variants are added deliberately above where appropriate.
         updated += L"0.0.0.0 " + domain + L"\r\n";
     }
-    // Add IPv6 sink entries for the explicitly requested domain too, so an AAAA
-    // lookup cannot bypass the IPv4 hosts-file block.
-    updated += L":: xnxx-arabic.com\r\n";
-    updated += L":: www.xnxx-arabic.com\r\n";
     updated += kEnd; updated += L"\r\n";
     if (!writeAtomically(path, updated)) return {false, 0, L"Could not update the hosts file. The original file was not replaced."};
     const bool dnsFlushed = flushDns();
     std::wstring resultMessage = dnsFlushed
         ? L"Domain blocking was applied and the DNS cache was flushed."
         : L"Blocking rules were written, but the DNS cache could not be flushed automatically. Restart your browser or run ipconfig /flushdns.";
-    if (!feedWarning.empty()) {
-        resultMessage += L" The online adult list could not be refreshed, so built-in adult domains and your custom rules were applied without the updated community list. Details: ";
-        resultMessage += feedWarning;
-    }
     return {true, domains.size(), std::move(resultMessage)};
 }
 
