@@ -270,6 +270,11 @@ PolicySyncResult ExecutionPolicy::synchronize(ConfigStore& store) {
     DWORD_PTR ignored=0;
     SendMessageTimeoutW(HWND_BROADCAST,WM_SETTINGCHANGE,0,reinterpret_cast<LPARAM>(L"Software\\Policies\\Microsoft\\Windows\\Safer\\CodeIdentifiers"),SMTO_ABORTIFHUNG,2000,&ignored);
     store.logEvent(L"execution_policy_synced",std::to_wstring(rules.size()));
-    return {true,rules.size(),L"تم تحديث قواعد منع تشغيل التطبيقات والملفات داخل المجلدات المحددة."};
+    return {true,rules.size(),L"تم تحديث قواعد منع التشغيل والوصول للمجلدات المحددة."};
+}
+PolicySyncResult ExecutionPolicy::restoreAll() {
+    if(!removeManagedRules()) return {false,0,L"تعذر إزالة قواعد منع التشغيل عند إيقاف الخدمة."};
+    if(!synchronizeFolderAccess({})) return {false,0,L"تعذر استعادة صلاحيات بعض المجلدات."};
+    return {true,0,L"تمت إزالة قواعد Himaya واستعادة صلاحيات المجلدات."};
 }
 }
