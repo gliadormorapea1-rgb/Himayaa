@@ -76,10 +76,17 @@ int wmain(int argc,wchar_t** argv) {
     store.removeEntry(L"applications",testPath);
     if(!store.addEntry(L"applications",testPath,L"long",L"simple")) {DeleteFileW(testPath.c_str());return 14;}
     auto applied=himaya::ExecutionPolicy::synchronize(store);
-    if(!applied.success || !launchProbe(testPath,true)) {
+    if(!applied.success) {
+        wprintf(L"AppLocker apply failed: %ls\\n",applied.message.c_str());
         store.removeEntry(L"applications",testPath);
         himaya::ExecutionPolicy::synchronize(store);
         DeleteFileW(testPath.c_str());return 15;
+    }
+    if(!launchProbe(testPath,true)) {
+        wprintf(L"AppLocker rule was written, but Windows did not block the probe process.\\n");
+        store.removeEntry(L"applications",testPath);
+        himaya::ExecutionPolicy::synchronize(store);
+        DeleteFileW(testPath.c_str());return 29;
     }
     if(!store.removeEntry(L"applications",testPath)) {DeleteFileW(testPath.c_str());return 16;}
     auto removed=himaya::ExecutionPolicy::synchronize(store);
