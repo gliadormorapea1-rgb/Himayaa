@@ -28,12 +28,25 @@ jobs:
             "Core/WebsiteBlocker.cpp",
             "Core/ExecutionPolicy.cpp",
             "Service/service_main.cpp",
-            "Installer/Himaya.iss"
+            "Installer/Himaya.iss",
+            "NativeHost/native_host.cpp",
+            "BrowserExtension/manifest.json",
+            "BrowserExtension/content.js",
+            "BrowserExtension/popup.js",
+            "BrowserExtension/popup.html"
           )
           foreach ($file in $required) {
             if (!(Test-Path $file)) { throw "Required source file missing: $file" }
           }
           Write-Host "Canonical source validated from repository root."
+          $manifest = Get-Content "BrowserExtension/manifest.json" -Raw | ConvertFrom-Json
+          if ($manifest.manifest_version -ne 3 -or !$manifest.key) { throw "Browser extension manifest is invalid." }
+          node --check "BrowserExtension/background.js"
+          if ($LASTEXITCODE -ne 0) { throw "Browser extension background script syntax check failed." }
+          node --check "BrowserExtension/content.js"
+          if ($LASTEXITCODE -ne 0) { throw "Browser extension content script syntax check failed." }
+          node --check "BrowserExtension/popup.js"
+          if ($LASTEXITCODE -ne 0) { throw "Browser extension popup script syntax check failed." }
 
       - name: Validate embedded DNS PowerShell syntax
         shell: pwsh
@@ -84,7 +97,7 @@ jobs:
       - name: Verify application and service executables
         shell: pwsh
         run: |
-          foreach ($exe in @("build/bin/Himaya.exe","build/bin/HimayaGuard.exe")) {
+          foreach ($exe in @("build/bin/Himaya.exe","build/bin/HimayaGuard.exe","build/bin/HimayaNativeHost.exe")) {
             if (!(Test-Path $exe)) { throw "Expected executable was not generated: $exe" }
             $item = Get-Item $exe
             if ($item.Length -lt 16384) { throw "Executable is unexpectedly small ($($item.Length) bytes)." }
@@ -162,6 +175,7 @@ jobs:
           path: |
             build/bin/Himaya.exe
             build/bin/HimayaGuard.exe
+            build/bin/HimayaNativeHost.exe
             Installer/Output/Himaya-Setup.exe
           if-no-files-found: error
           retention-days: 30

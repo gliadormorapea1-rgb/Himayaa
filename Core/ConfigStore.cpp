@@ -125,9 +125,8 @@ bool ConfigStore::initialize() {
         "BEGIN SELECT RAISE(ABORT,'Strict-mode lock is active and cannot be changed before expiry.'); END;"
     )) return false;
 
-    // Adult-domain filtering is enabled by default. Trusted-person approval and timed unlock are intentionally out of scope.
-    setSetting(L"adult_block_mode", L"all");
-    execute("DELETE FROM settings WHERE key IN ('unlock_mode','password_admin');");
+    // Preserve existing user choices and legacy keys. Insert the default only for a new database.
+    if (!execute("INSERT OR IGNORE INTO settings(key,value) VALUES('adult_block_mode','all');")) return false;
     // Keep only the two supported profiles. Migrate legacy profile entries to Basic.
     if (!execute("UPDATE entries SET profile='simple' WHERE profile NOT IN ('simple','severe');"
                  "DELETE FROM profiles WHERE profile_id NOT IN ('simple','severe');")) return false;

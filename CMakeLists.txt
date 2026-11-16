@@ -51,9 +51,13 @@ endif()
 add_executable(HimayaGuard Service/service_main.cpp)
 target_link_libraries(HimayaGuard PRIVATE HimayaCore advapi32)
 
+add_executable(HimayaNativeHost NativeHost/native_host.cpp)
+target_link_libraries(HimayaNativeHost PRIVATE advapi32)
+
 add_executable(HimayaPolicySmokeTest tests/PolicySmokeTest.cpp)
 target_link_libraries(HimayaPolicySmokeTest PRIVATE HimayaCore advapi32)
 
 set_target_properties(Himaya PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin" RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")
+set_target_properties(HimayaNativeHost PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin" RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")
 set_target_properties(HimayaGuard PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin" RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")
 set_target_properties(HimayaPolicySmokeTest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin" RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")

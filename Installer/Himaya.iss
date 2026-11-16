@@ -24,6 +24,8 @@ Name: "{commonappdata}\Himaya"; Permissions: admins-full system-full
 [Files]
 Source: "..\build\bin\Himaya.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\bin\HimayaGuard.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\bin\HimayaNativeHost.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\BrowserExtension\*"; DestDir: "{app}\BrowserExtension"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\Himaya Security"; Filename: "{app}\{#MyAppExeName}"
@@ -40,6 +42,9 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
   Params: String;
+  HostPath: String;
+  ManifestPath: String;
+  ManifestText: String;
 begin
   if CurStep = ssInstall then
   begin
@@ -48,6 +53,17 @@ begin
   end;
   if CurStep = ssPostInstall then
   begin
+    HostPath := ExpandConstant('{app}\HimayaNativeHost.exe');
+    StringChangeEx(HostPath, '\', '\\', True);
+    ManifestPath := ExpandConstant('{app}\com.himaya.security.json');
+    ManifestText := '{"name":"com.himaya.security","description":"Himaya Shorts and Reels Guard","path":"' + HostPath + '","type":"stdio","allowed_origins":["chrome-extension://mcghfimhokbfdgingelnojmgcneeppip/"]}';
+    if not SaveStringToFile(ManifestPath, ManifestText, False) then
+    begin
+      MsgBox('تعذر إنشاء ملف ربط إضافة المتصفح. لم يتم إكمال تسجيل Native Messaging.', mbError, MB_OK);
+      Abort;
+    end;
+    RegWriteStringValue(HKLM, 'SOFTWARE\Google\Chrome\NativeMessagingHosts\com.himaya.security', '', ManifestPath);
+    RegWriteStringValue(HKLM, 'SOFTWARE\Microsoft\Edge\NativeMessagingHosts\com.himaya.security', '', ManifestPath);
     Params := 'create HimayaGuard binPath= "' + ExpandConstant('{app}\HimayaGuard.exe') + '" start= auto DisplayName= "Himaya Protection Service"';
     Exec(ExpandConstant('{sys}\sc.exe'), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Params := 'config HimayaGuard start= auto binPath= "' + ExpandConstant('{app}\HimayaGuard.exe') + '"';
@@ -96,5 +112,7 @@ begin
     Sleep(10000);
     Exec(ExpandConstant('{app}\Himaya.exe'), '--restore-dns', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(ExpandConstant('{sys}\sc.exe'), 'delete HimayaGuard', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    RegDeleteKeyIncludingSubkeys(HKLM, 'SOFTWARE\Google\Chrome\NativeMessagingHosts\com.himaya.security');
+    RegDeleteKeyIncludingSubkeys(HKLM, 'SOFTWARE\Microsoft\Edge\NativeMessagingHosts\com.himaya.security');
   end;
 end;

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Himaya Shorts & Reels Guard",
+  "version": "1.0.0",
+  "description": "Blocks short-form video destinations on websites selected in Himaya Security.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlOh4d1KzwOHhZHYyktB8r0LY16c5U6+p4VHZTxegT6UT7Xven0STqmTPYh7bF1OsRTp/fjl3tQGa+78K01jn+egl5IWZ58lefyKpS2mUGn+2/MUlahIUQlBZPXqHBh+LbCU/iUR3N41kQQ5/e91vblw9pJWm4hr4rEjS2i9RKPBuSrqhTN8wJcF52gkAJzBjS0j6JbnElH5XefJreEkxFWdux3Q+OXSkKZaiKpKh5qK3aCes4rwnhn5xwmd94qi53LsKhHC+/UlFoP4aUfbiEmuYj3ZtGcwrQRYLCql9adGATBqF31QVVkMIZlOPNdeOm0hean6qXLJyDZ2VvwKa4QIDAQAB",
+  "permissions": ["nativeMessaging", "scripting"],
+  "host_permissions": ["*://*.youtube.com/*", "*://*.instagram.com/*", "*://*.facebook.com/*"],
+  "optional_host_permissions": ["*://*/*"],
+  "action": { "default_popup": "popup.html" },
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{
+    "matches": ["*://*.youtube.com/*", "*://*.instagram.com/*", "*://*.facebook.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_start"
+  }]
+}

@@ -100,6 +100,25 @@ int wmain(int argc,wchar_t** argv) {
 
 
     if(!store.isReady()) {DeleteFileW(testPath.c_str());return 13;}
+    const auto oldAdultMode=store.getSetting(L"adult_block_mode",L"all");
+    const auto oldUnlockMode=store.getSetting(L"unlock_mode",L"");
+    const auto oldPasswordAdmin=store.getSetting(L"password_admin",L"");
+    store.setSetting(L"adult_block_mode",L"preserve-test-value");
+    store.setSetting(L"unlock_mode",L"legacy-preserve");
+    store.setSetting(L"password_admin",L"legacy-preserve");
+    {
+        himaya::ConfigStore reopened;
+        if(!reopened.isReady() ||
+           reopened.getSetting(L"adult_block_mode")!=L"preserve-test-value" ||
+           reopened.getSetting(L"unlock_mode")!=L"legacy-preserve" ||
+           reopened.getSetting(L"password_admin")!=L"legacy-preserve") {
+            store.setSetting(L"adult_block_mode",oldAdultMode);
+            DeleteFileW(testPath.c_str()); return 32;
+        }
+    }
+    store.setSetting(L"adult_block_mode",oldAdultMode);
+    store.setSetting(L"unlock_mode",oldUnlockMode);
+    store.setSetting(L"password_admin",oldPasswordAdmin);
     const std::wstring strictDomain=L"himaya-strict-test-"+std::to_wstring(GetCurrentProcessId())+L".invalid";
     if(!store.addEntry(L"websites",strictDomain,L"2m",L"severe")) {DeleteFileW(testPath.c_str());return 30;}
     const auto strictEntries=store.load(L"websites");
