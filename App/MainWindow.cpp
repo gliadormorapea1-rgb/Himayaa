@@ -70,7 +70,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE: {
         auto title = makeControl(hwnd_, L"STATIC", L"HIMAYA  |  DIGITAL WELLNESS PROTECTION", SS_LEFT, 28,18,960,42,0,instance_);
         setFont(title);
-        auto subtitle = makeControl(hwnd_, L"STATIC", L"Manage application, website, and folder protection — Version 0.5.0", SS_LEFT, 30,60,950,28,0,instance_);
+        auto subtitle = makeControl(hwnd_, L"STATIC", L"Manage application, website, and folder protection — Version 0.6.0", SS_LEFT, 30,60,950,28,0,instance_);
         setFont(subtitle);
         settings_ = makeControl(hwnd_, L"STATIC", L"Protect applications, websites, and folders with locally managed, reversible rules", SS_LEFT, 30,98,960,28,0,instance_);
         setFont(settings_);
