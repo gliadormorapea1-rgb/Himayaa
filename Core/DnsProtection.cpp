@@ -47,7 +47,8 @@ function Get-AddressFamilyName {
 }
 function Get-AdapterForIndex {
   param([int]$Index)
-  return Get-NetAdapter -IncludeHidden -InterfaceIndex $Index -ErrorAction SilentlyContinue |
+  return Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+    Where-Object { [int]$_.InterfaceIndex -eq $Index } |
     Select-Object -First 1
 }
 function Backup-Settings {
@@ -71,7 +72,11 @@ function Backup-Settings {
   $dns = @($b.Dns)
   $known = @{}
   foreach ($entry in $dns) {
-    $known["$($entry.InterfaceIndex)|$($entry.AddressFamily)"] = $true
+    $savedFamily = Get-AddressFamilyName $entry.AddressFamily
+    if ($null -ne $savedFamily) {
+      $entry.AddressFamily = $savedFamily
+      $known["$($entry.InterfaceIndex)|$savedFamily"] = $true
+    }
   }
   foreach ($entry in (Get-DnsClientServerAddress -ErrorAction Stop)) {
     if ($entry.InterfaceAlias -match 'Loopback') { continue }
@@ -229,6 +234,7 @@ function Restore-Protection {
       throw 'The DNS backup is invalid. It was preserved; restore was not attempted.'
     }
     $restoreErrors = @()
+    $resolvedDns = @()
     foreach ($entry in @($b.Dns)) {
       try {
         $targetIndex = [int]$entry.InterfaceIndex
@@ -245,16 +251,34 @@ function Restore-Protection {
         }
         $family = Get-AddressFamilyName $entry.AddressFamily
         if ($null -eq $family) { throw "Unknown saved address family '$($entry.AddressFamily)'." }
-        if ($entry.Dhcp) {
-          Set-DnsClientServerAddress -InterfaceIndex $targetIndex -ResetServerAddresses -ErrorAction Stop
-        } elseif (@($entry.Servers).Count -gt 0) {
-          Set-DnsClientServerAddress -InterfaceIndex $targetIndex -ServerAddresses @($entry.Servers) -ErrorAction Stop
-        } else {
-          Set-DnsClientServerAddress -InterfaceIndex $targetIndex -AddressFamily $family -ResetServerAddresses -ErrorAction Stop
+        $resolvedDns += [pscustomobject]@{
+          Entry = $entry
+          Index = $targetIndex
+          Adapter = $existingAdapter
+          Family = $family
+          NeedsReset = ([bool]$entry.Dhcp -or @($entry.Servers).Count -eq 0)
         }
-        Write-Log "Restored $family DNS on $($existingAdapter.Name) (index $targetIndex)."
       } catch {
         $restoreErrors += "DNS interface $($entry.InterfaceAlias) ($($entry.AddressFamily)): $($_.Exception.Message)"
+      }
+    }
+    # Reset DHCP-managed families first: ResetServerAddresses may reset both
+    # protocol families on an interface. Static families are reapplied second.
+    $resetIndexes = @($resolvedDns | Where-Object { $_.NeedsReset } | Select-Object -ExpandProperty Index -Unique)
+    foreach ($index in $resetIndexes) {
+      try {
+        Set-DnsClientServerAddress -InterfaceIndex ([int]$index) -ResetServerAddresses -ErrorAction Stop
+        Write-Log "Reset DNS to automatic assignment on interface index $index."
+      } catch {
+        $restoreErrors += "DNS reset on interface index $index: $($_.Exception.Message)"
+      }
+    }
+    foreach ($item in @($resolvedDns | Where-Object { -not $_.NeedsReset })) {
+      try {
+        Set-DnsClientServerAddress -InterfaceIndex ([int]$item.Index) -ServerAddresses @($item.Entry.Servers) -ErrorAction Stop
+        Write-Log "Restored static $($item.Family) DNS on $($item.Adapter.Name) (index $($item.Index))."
+      } catch {
+        $restoreErrors += "DNS interface $($item.Adapter.Name) ($($item.Family)): $($_.Exception.Message)"
       }
     }
 
