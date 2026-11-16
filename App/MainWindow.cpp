@@ -26,7 +26,7 @@ enum : int {
     ID_NAV_DASHBOARD=1101, ID_NAV_APPLICATIONS=1102, ID_NAV_WEBSITES=1103,
     ID_NAV_PROTECTION=1104, ID_NAV_LOGS=1105, ID_NAV_STATISTICS=1106,
     ID_NAV_SETTINGS=1107, ID_NAV_HEALTH=1108, ID_THEME=1109, ID_REFRESH_HEALTH=1110,
-    ID_NAV_REELS=1111, ID_REELS_MODE=1201, ID_REELS_DURATION=1202, ID_REELS_SITES=1203, ID_REELS_ENABLE=1204, ID_REELS_STOP=1205
+    ID_NAV_REELS=1111, ID_NAV_SOCIAL=1112, ID_REELS_MODE=1201, ID_REELS_DURATION=1202, ID_REELS_SITES=1203, ID_REELS_ENABLE=1204, ID_REELS_STOP=1205, ID_REELS_DATE=1206
 };
 bool gDarkTheme = true;
 HBRUSH gBackgroundBrush = nullptr;
@@ -166,15 +166,16 @@ void MainWindow::layoutControls() {
     move(dashboardDns_,x+cardW+gap+16,cardY+cardH+gap+16,cardW-32,cardH-32);
 
     const int col=(contentW-36)/3, rowY=145;
-    move(categoryLabel_,x,rowY, col,22); move(category_,x,rowY+26,col,150);
-    move(profileLabel_,x+col+18,rowY,col,22); move(profile_,x+col+18,rowY+26,col,110);
-    move(durationLabel_,x+2*(col+18),rowY,col,22); move(duration_,x+2*(col+18),rowY+26,col,190);
-    move(inputLabel_,x,226,contentW,22);
+    move(categoryLabel_,x,rowY, col,22); move(category_,x,rowY+26,col,34);
+    move(profileLabel_,x+col+18,rowY,col,22); move(profile_,x+col+18,rowY+26,col,34);
+    move(durationLabel_,x+2*(col+18),rowY,col,22); move(duration_,x+2*(col+18),rowY+26,col,34);
+    move(durationDateLabel_,x+2*(col+18),rowY+66,col,20); move(durationDate_,x+2*(col+18),rowY+86,col,32);
+    move(inputLabel_,x,238,contentW,22);
     const int browseW=132, addW=150;
-    move(input_,x,254,contentW-browseW-addW-20,38);
-    move(browse_,x+contentW-browseW-addW-14,254,browseW,38);
-    move(addButton_,x+contentW-addW,254,addW,38);
-    move(list_,x,310,contentW,std::max(190,height-520));
+    move(input_,x,266,contentW-browseW-addW-20,38);
+    move(browse_,x+contentW-browseW-addW-14,266,browseW,38);
+    move(addButton_,x+contentW-addW,266,addW,38);
+    move(list_,x,322,contentW,std::max(170,height-532));
     const int actionY=height-142;
     move(removeButton_,x,actionY,180,38);
     move(refreshButton_,x+194,actionY,140,38);
@@ -193,14 +194,15 @@ void MainWindow::layoutControls() {
     move(healthSummary_,x,150,contentW,430);
     move(healthRefresh_,x,600,180,42);
     move(reelsModeLabel_,x,150,contentW/2-12,22); move(reelsMode_,x,178,contentW/2-12,170);
-    move(reelsDurationLabel_,x+contentW/2+12,150,contentW/2-12,22); move(reelsDuration_,x+contentW/2+12,178,contentW/2-12,170);
-    move(reelsSitesLabel_,x,270,contentW,22); move(reelsSites_,x,298,contentW,38);
-    move(reelsEnable_,x,360,220,42); move(reelsStop_,x+238,360,220,42); move(reelsStatus_,x,430,contentW,160);
+    move(reelsDurationLabel_,x+contentW/2+12,150,contentW/2-12,22); move(reelsDuration_,x+contentW/2+12,178,contentW/2-12,34);
+    move(reelsDateLabel_,x+contentW/2+12,220,contentW/2-12,20); move(reelsDate_,x+contentW/2+12,242,contentW/2-12,32);
+    move(reelsSitesLabel_,x,292,contentW,22); move(reelsSites_,x,320,contentW,38);
+    move(reelsEnable_,x,380,220,42); move(reelsStop_,x+238,380,220,42); move(reelsStatus_,x,450,contentW,160);
     move(status_,x,height-42,contentW,30);
 }
 
 void MainWindow::setPage(int page) {
-    currentPage_=std::clamp(page,0,8);
+    currentPage_=std::clamp(page,0,9);
     if(profileLabel_) ShowWindow(profileLabel_,SW_HIDE);
     if(profile_) ShowWindow(profile_,SW_HIDE);
     auto show=[&](const std::vector<HWND>& group,bool visible) {
@@ -213,15 +215,19 @@ void MainWindow::setPage(int page) {
     show(settingsControls_,currentPage_==6);
     show(healthControls_,currentPage_==7);
     show(reelsControls_,currentPage_==8);
-    if (currentPage_==1 || currentPage_==2) {
+    if (currentPage_==1 || currentPage_==2 || currentPage_==9) {
         show(managementControls_,true);
         if(profileLabel_) ShowWindow(profileLabel_,SW_SHOW);
         if(profile_) ShowWindow(profile_,SW_SHOW);
-        SendMessageW(category_,CB_SETCURSEL,currentPage_==2?1:0,0);
+        SendMessageW(category_,CB_SETCURSEL,currentPage_==9?3:(currentPage_==2?1:0),0);
         const bool websites=currentPage_==2;
+        const bool social=currentPage_==9;
+        if(social) { SetWindowTextW(inputLabel_,L"Social platform domain (example: youtube.com)"); SetWindowTextW(durationLabel_,L"Full website lock duration"); }
+        else { SetWindowTextW(inputLabel_,L"Application, website, or folder"); SetWindowTextW(durationLabel_,L"Lock duration"); }
         if(applySites_) ShowWindow(applySites_,websites?SW_SHOW:SW_HIDE);
         if(restoreSites_) ShowWindow(restoreSites_,websites?SW_SHOW:SW_HIDE);
         if(restoreOriginalHosts_) ShowWindow(restoreOriginalHosts_,websites?SW_SHOW:SW_HIDE);
+        if(browse_) ShowWindow(browse_,social?SW_HIDE:SW_SHOW);
     } else if(currentPage_==3) {
         if(profileLabel_) ShowWindow(profileLabel_,SW_SHOW);
         if(profile_) ShowWindow(profile_,SW_SHOW);
@@ -230,7 +236,7 @@ void MainWindow::setPage(int page) {
         if(refreshButton_) ShowWindow(refreshButton_,SW_SHOW);
         if(reportButton_) ShowWindow(reportButton_,SW_SHOW);
     }
-    const wchar_t* titles[]={L"Dashboard",L"Applications",L"Websites",L"Protection",L"Activity Logs",L"Statistics",L"Settings",L"Protection Health",L"Shorts & Reels"};
+    const wchar_t* titles[]={L"Dashboard",L"Applications",L"Websites",L"Protection",L"Activity Logs",L"Statistics",L"Settings",L"Protection Health",L"Shorts & Reels",L"Social Website Lock"};
     const wchar_t* subtitles[]={
         L"Your device protection at a glance.",
         L"Manage blocked applications and protected folders.",
@@ -240,7 +246,8 @@ void MainWindow::setPage(int page) {
         L"An overview calculated from the data currently stored by Himaya.",
         L"Customize the appearance of the Himaya interface.",
         L"Check the live protection service and review saved protection configuration.",
-        L"Block Shorts and Reels without blocking the full website."
+        L"Block Shorts and Reels without blocking the full website.",
+        L"Temporarily block entire social websites with independent Basic and Strict locks."
     };
     if(pageTitle_) {
         ShowWindow(pageTitle_,SW_HIDE);
@@ -260,6 +267,7 @@ void MainWindow::setPage(int page) {
     if(navStatistics_) InvalidateRect(navStatistics_,nullptr,TRUE);
     if(navSettings_) InvalidateRect(navSettings_,nullptr,TRUE);
     if(navReels_) InvalidateRect(navReels_,nullptr,TRUE);
+    if(navSocial_) InvalidateRect(navSocial_,nullptr,TRUE);
     layoutControls();
     if(currentPage_==1 || currentPage_==2 || currentPage_==4) refreshList();
     if(currentPage_==0) refreshDashboard();
@@ -319,9 +327,14 @@ void MainWindow::startReelsSession() {
     if(normalized.empty()) normalized=L"youtube.com;instagram.com;facebook.com";
     const LRESULT modeIndex=SendMessageW(reelsMode_,CB_GETCURSEL,0,0);
     const LRESULT durationIndex=SendMessageW(reelsDuration_,CB_GETCURSEL,0,0);
-    const int durations[]={1800,3600,7200,14400,28800};
-    const int index=(durationIndex>=0 && durationIndex<5)?static_cast<int>(durationIndex):1;
-    const long long until=static_cast<long long>(std::time(nullptr))+durations[index];
+    const auto duration=selectedReelsDuration();
+    if(duration.empty()) { MessageBoxW(hwnd_,L"Enter a valid future local date/time using YYYY-MM-DD HH:MM.",L"Invalid expiry",MB_OK|MB_ICONWARNING); return; }
+    long long until=0;
+    if(duration.rfind(L"until:",0)==0) until=std::stoll(duration.substr(6));
+    else if(duration==L"1d") until=static_cast<long long>(std::time(nullptr))+86400;
+    else if(duration==L"7d") until=static_cast<long long>(std::time(nullptr))+604800;
+    else if(duration==L"30d") until=static_cast<long long>(std::time(nullptr))+2592000;
+    else if(duration==L"365d") until=static_cast<long long>(std::time(nullptr))+31536000;
     const std::wstring mode=modeIndex==1?L"strict":L"basic";
     if(!store_.setSetting(L"reels.sites",normalized) || !store_.setSetting(L"reels.mode",mode) ||
        !store_.setSetting(L"reels.until",std::to_wstring(until)) || !store_.setSetting(L"reels.enabled",L"1")) {
@@ -369,9 +382,9 @@ void MainWindow::refreshReelsStatus() {
     const auto mode=store_.getSetting(L"reels.mode",L"basic");
     long long until=0; try { until=std::stoll(store_.getSetting(L"reels.until",L"0")); } catch(...) {}
     const long long remaining=until-static_cast<long long>(std::time(nullptr));
-    const bool active=enabled && remaining>0;
+    const bool active=enabled && (until==0 || remaining>0);
     std::wstring status=active ? L"SESSION ACTIVE\nMode: "+std::wstring(mode==L"strict"?L"Strict — early stop disabled in Himaya":L"Basic — can stop early")+
-        L"\nTime remaining: "+std::to_wstring(remaining/3600)+L"h "+std::to_wstring((remaining%3600)/60)+L"m"
+        (until==0?L"\nDuration: Forever":L"\nTime remaining: "+std::to_wstring(std::max(0LL,remaining)/86400)+L"d "+std::to_wstring((std::max(0LL,remaining)%86400)/3600)+L"h")
         : L"No Shorts/Reels session is active.";
     status+=L"\n\nSites: "+store_.getSetting(L"reels.sites",L"youtube.com;instagram.com;facebook.com");
     status+=L"\n\nChrome/Edge extension must be loaded once from the Himaya installation folder.";
@@ -457,6 +470,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         themeToggle_=makeControl(hwnd_,L"BUTTON",L"Switch to Light Mode",BS_PUSHBUTTON,22,0,185,40,ID_THEME,instance_);
         auto navHealth=makeControl(hwnd_,L"BUTTON",L"Protection Health",BS_OWNERDRAW,navX,navY+7*(navH+navGap),navW,navH,ID_NAV_HEALTH,instance_);
         navReels_=makeControl(hwnd_,L"BUTTON",L"Shorts & Reels",BS_OWNERDRAW,navX,navY+8*(navH+navGap),navW,navH,ID_NAV_REELS,instance_);
+        navSocial_=makeControl(hwnd_,L"BUTTON",L"Social Website Lock",BS_OWNERDRAW,navX,navY+9*(navH+navGap),navW,navH,ID_NAV_SOCIAL,instance_);
 
         dashboardApps_=makeControl(hwnd_,L"STATIC",L"APPLICATIONS\n0 blocked",SS_LEFT,0,0,400,90,0,instance_); setFont(dashboardApps_,cardFont());
         dashboardWebsites_=makeControl(hwnd_,L"STATIC",L"WEBSITES\n0 blocked",SS_LEFT,0,0,400,90,0,instance_); setFont(dashboardWebsites_,cardFont());
@@ -470,6 +484,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         SendMessageW(category_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Applications"));
         SendMessageW(category_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Websites"));
         SendMessageW(category_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Folders"));
+        SendMessageW(category_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Social platforms"));
         SendMessageW(category_,CB_SETCURSEL,0,0);
         profileLabel_=makeControl(hwnd_,L"STATIC",L"Protection profile",SS_LEFT,0,0,180,22,0,instance_);
         profile_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,0,0,200,180,ID_PROFILE,instance_);
@@ -478,9 +493,11 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         SendMessageW(profile_,CB_SETCURSEL,store_.getSetting(L"active_profile",L"simple")==L"severe"?1:0,0);
         durationLabel_=makeControl(hwnd_,L"STATIC",L"Application lock duration",SS_LEFT,0,0,220,22,0,instance_);
         duration_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,0,0,220,180,ID_DURATION,instance_);
-        const wchar_t* durations[]={L"Long-term — no automatic expiry",L"2 minutes — test",L"1 hour",L"24 hours",L"7 days",L"30 days",L"90 days"};
+        const wchar_t* durations[]={L"1 day",L"1 week",L"1 month",L"1 year",L"Specific date and time",L"Forever — no automatic expiry"};
         for(const auto* duration:durations) SendMessageW(duration_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(duration));
-        SendMessageW(duration_,CB_SETCURSEL,0,0);
+        SendMessageW(duration_,CB_SETCURSEL,5,0);
+        durationDateLabel_=makeControl(hwnd_,L"STATIC",L"Expiry (YYYY-MM-DD HH:MM, local time)",SS_LEFT,0,0,260,20,0,instance_);
+        durationDate_=makeControl(hwnd_,L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL,0,0,240,32,0,instance_);
         inputLabel_=makeControl(hwnd_,L"STATIC",L"Application, website, or folder",SS_LEFT,0,0,500,22,0,instance_);
         input_=makeControl(hwnd_,L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL,0,0,400,38,ID_INPUT,instance_);
         browse_=makeControl(hwnd_,L"BUTTON",L"Browse...",BS_PUSHBUTTON,0,0,130,38,ID_BROWSE,instance_);
@@ -508,22 +525,24 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         SendMessageW(reelsMode_,CB_SETCURSEL,0,0);
         reelsDurationLabel_=makeControl(hwnd_,L"STATIC",L"Session duration",SS_LEFT,0,0,240,22,0,instance_);
         reelsDuration_=makeControl(hwnd_,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,0,0,240,160,ID_REELS_DURATION,instance_);
-        const wchar_t* reelsDurations[]={L"30 minutes",L"1 hour",L"2 hours",L"4 hours",L"8 hours"};
+        const wchar_t* reelsDurations[]={L"1 day",L"1 week",L"1 month",L"1 year",L"Specific date and time",L"Forever"};
         for(const auto* value:reelsDurations) SendMessageW(reelsDuration_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(value));
-        SendMessageW(reelsDuration_,CB_SETCURSEL,1,0);
+        SendMessageW(reelsDuration_,CB_SETCURSEL,0,0);
+        reelsDateLabel_=makeControl(hwnd_,L"STATIC",L"Expiry (YYYY-MM-DD HH:MM, local time)",SS_LEFT,0,0,260,20,0,instance_);
+        reelsDate_=makeControl(hwnd_,L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL,0,0,240,32,ID_REELS_DATE,instance_);
         reelsSitesLabel_=makeControl(hwnd_,L"STATIC",L"Supported sites (default: YouTube, Instagram, Facebook)",SS_LEFT,0,0,700,22,0,instance_);
         reelsSites_=makeControl(hwnd_,L"EDIT",L"youtube.com;instagram.com;facebook.com",WS_BORDER|ES_AUTOHSCROLL,0,0,700,38,ID_REELS_SITES,instance_);
         reelsEnable_=makeControl(hwnd_,L"BUTTON",L"Start focus session",BS_PUSHBUTTON,0,0,220,42,ID_REELS_ENABLE,instance_);
         reelsStop_=makeControl(hwnd_,L"BUTTON",L"Stop Basic session",BS_PUSHBUTTON,0,0,220,42,ID_REELS_STOP,instance_);
         reelsStatus_=makeControl(hwnd_,L"STATIC",L"No Shorts/Reels session is active.",SS_LEFT,0,0,800,120,0,instance_);
         addGroup(reelsControls_,reelsModeLabel_); addGroup(reelsControls_,reelsMode_);
-        addGroup(reelsControls_,reelsDurationLabel_); addGroup(reelsControls_,reelsDuration_);
+        addGroup(reelsControls_,reelsDurationLabel_); addGroup(reelsControls_,reelsDuration_); addGroup(reelsControls_,reelsDateLabel_); addGroup(reelsControls_,reelsDate_);
         addGroup(reelsControls_,reelsSitesLabel_); addGroup(reelsControls_,reelsSites_);
         addGroup(reelsControls_,reelsEnable_); addGroup(reelsControls_,reelsStop_); addGroup(reelsControls_,reelsStatus_);
         status_=makeControl(hwnd_,L"STATIC",L"Ready.",SS_LEFT,260,0,900,30,0,instance_);
 
         addGroup(managementControls_,categoryLabel_); addGroup(managementControls_,category_);
-        addGroup(managementControls_,durationLabel_); addGroup(managementControls_,duration_);
+        addGroup(managementControls_,durationLabel_); addGroup(managementControls_,duration_); addGroup(managementControls_,durationDateLabel_); addGroup(managementControls_,durationDate_);
         addGroup(managementControls_,inputLabel_); addGroup(managementControls_,input_);
         addGroup(managementControls_,browse_); addGroup(managementControls_,addButton_);
         addGroup(managementControls_,list_); addGroup(managementControls_,removeButton_);
@@ -572,6 +591,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         case ID_NAV_SETTINGS: setPage(6); return 0;
         case ID_NAV_HEALTH: setPage(7); return 0;
         case ID_NAV_REELS: setPage(8); return 0;
+        case ID_NAV_SOCIAL: setPage(9); return 0;
         case ID_REELS_ENABLE: startReelsSession(); return 0;
         case ID_REELS_STOP: stopReelsSession(); return 0;
         case ID_THEME: toggleTheme(); return 0;
@@ -612,8 +632,8 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     case WM_DRAWITEM: {
         auto* item=reinterpret_cast<DRAWITEMSTRUCT*>(lp);
         const int id=static_cast<int>(item->CtlID);
-        if((id>=ID_NAV_DASHBOARD && id<=ID_NAV_HEALTH) || id==ID_NAV_REELS) {
-            const int page=id==ID_NAV_REELS?8:id-ID_NAV_DASHBOARD;
+        if((id>=ID_NAV_DASHBOARD && id<=ID_NAV_HEALTH) || id==ID_NAV_REELS || id==ID_NAV_SOCIAL) {
+            const int page=id==ID_NAV_REELS?8:(id==ID_NAV_SOCIAL?9:id-ID_NAV_DASHBOARD);
             const bool selected=page==currentPage_;
             const bool hot=(item->itemState&ODS_HOTLIGHT)!=0;
             HBRUSH fill=CreateSolidBrush(selected?(gDarkTheme?RGB(39,58,85):RGB(231,239,255)):
@@ -659,12 +679,52 @@ std::wstring MainWindow::selectedCategory() const {
     const LRESULT index = SendMessageW(category_, CB_GETCURSEL, 0, 0);
     if (index == 1) return L"websites";
     if (index == 2) return L"paths";
+    if (index == 3) return L"social_sites";
     return L"applications";
 }
 
 std::wstring MainWindow::selectedDuration() const {
     const LRESULT index = SendMessageW(duration_, CB_GETCURSEL, 0, 0);
-    switch (index) { case 1: return L"2m"; case 2: return L"1h"; case 3: return L"24h"; case 4: return L"7d"; case 5: return L"30d"; case 6: return L"90d"; default: return L"long"; }
+    switch(index) {
+        case 0: return L"1d";
+        case 1: return L"7d";
+        case 2: return L"30d";
+        case 3: return L"365d";
+        case 4: {
+            wchar_t text[64]{}; GetWindowTextW(durationDate_,text,static_cast<int>(std::size(text)));
+            int y=0,mo=0,d=0,h=0,mi=0;
+            if(swscanf_s(text,L"%d-%d-%d %d:%d",&y,&mo,&d,&h,&mi)!=5) return {};
+            std::tm value{}; value.tm_year=y-1900; value.tm_mon=mo-1; value.tm_mday=d; value.tm_hour=h; value.tm_min=mi;
+            const std::time_t stamp=std::mktime(&value);
+            if(stamp<=std::time(nullptr)) return {};
+            std::tm check{}; localtime_s(&check,&stamp);
+            if(check.tm_year!=y-1900 || check.tm_mon!=mo-1 || check.tm_mday!=d || check.tm_hour!=h || check.tm_min!=mi) return {};
+            return L"until:"+std::to_wstring(static_cast<long long>(stamp));
+        }
+        default: return L"long";
+    }
+}
+
+std::wstring MainWindow::selectedReelsDuration() const {
+    const LRESULT index=SendMessageW(reelsDuration_,CB_GETCURSEL,0,0);
+    switch(index) {
+        case 0: return L"1d";
+        case 1: return L"7d";
+        case 2: return L"30d";
+        case 3: return L"365d";
+        case 4: {
+            wchar_t text[64]{}; GetWindowTextW(reelsDate_,text,static_cast<int>(std::size(text)));
+            int y=0,mo=0,d=0,h=0,mi=0;
+            if(swscanf_s(text,L"%d-%d-%d %d:%d",&y,&mo,&d,&h,&mi)!=5) return {};
+            std::tm value{}; value.tm_year=y-1900; value.tm_mon=mo-1; value.tm_mday=d; value.tm_hour=h; value.tm_min=mi;
+            const std::time_t stamp=std::mktime(&value);
+            if(stamp<=std::time(nullptr)) return {};
+            std::tm check{}; localtime_s(&check,&stamp);
+            if(check.tm_year!=y-1900 || check.tm_mon!=mo-1 || check.tm_mday!=d || check.tm_hour!=h || check.tm_min!=mi) return {};
+            return L"until:"+std::to_wstring(static_cast<long long>(stamp));
+        }
+        default: return L"long";
+    }
 }
 
 std::wstring MainWindow::selectedProfile() const {
@@ -707,7 +767,7 @@ void MainWindow::refreshList() {
         });
     if (restoreSites_) EnableWindow(restoreSites_, websites && !strictWebsiteLock);
     if (restoreOriginalHosts_) EnableWindow(restoreOriginalHosts_, websites && !strictWebsiteLock);
-    if (browse_) EnableWindow(browse_, selectedCategory() != L"websites");
+    if (browse_) EnableWindow(browse_, selectedCategory() != L"websites" && selectedCategory()!=L"social_sites");
 }
 
 void MainWindow::browseEntry() {
@@ -776,7 +836,8 @@ void MainWindow::addEntry() {
             L"Confirm folder access restriction",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2);
         if(answer!=IDYES) return;
     }
-    const auto duration = (category == L"applications" || category == L"websites") ? selectedDuration() : L"long";
+    const auto duration = selectedDuration();
+    if(duration.empty()) { MessageBoxW(hwnd_,L"Enter a valid future local date/time using YYYY-MM-DD HH:MM.",L"Invalid expiry",MB_OK|MB_ICONWARNING); return; }
     if (store_.addEntry(category, value, duration, selectedProfile())) {
         SetWindowTextW(input_, L""); refreshList(); refreshDashboard(); refreshStatistics();
         setStatus(category == L"websites" ? L"Website saved. HimayaGuard will synchronize the website block automatically; you can also apply it now." :
