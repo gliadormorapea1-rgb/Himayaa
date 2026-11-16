@@ -269,7 +269,7 @@ void MainWindow::setPage(int page) {
     if(navReels_) InvalidateRect(navReels_,nullptr,TRUE);
     if(navSocial_) InvalidateRect(navSocial_,nullptr,TRUE);
     layoutControls();
-    if(currentPage_==1 || currentPage_==2 || currentPage_==4) refreshList();
+    if(currentPage_==1 || currentPage_==2 || currentPage_==4 || currentPage_==9) refreshList();
     if(currentPage_==0) refreshDashboard();
     if(currentPage_==5) refreshStatistics();
     if(currentPage_==7) refreshHealth();
@@ -313,7 +313,7 @@ void MainWindow::startReelsSession() {
     long long currentUntil=0;
     try { currentUntil=std::stoll(store_.getSetting(L"reels.until",L"0")); } catch(...) {}
     if(store_.getSetting(L"reels.enabled",L"0")==L"1" &&
-       currentMode==L"strict" && currentUntil>static_cast<long long>(std::time(nullptr))) {
+       currentMode==L"strict" && (currentUntil==0 || currentUntil>static_cast<long long>(std::time(nullptr)))) {
         MessageBoxW(hwnd_,L"An active Strict session cannot be replaced or shortened. Wait until its timer expires.",L"Strict focus session",MB_OK|MB_ICONWARNING);
         return;
     }
@@ -326,7 +326,6 @@ void MainWindow::startReelsSession() {
     }
     if(normalized.empty()) normalized=L"youtube.com;instagram.com;facebook.com";
     const LRESULT modeIndex=SendMessageW(reelsMode_,CB_GETCURSEL,0,0);
-    const LRESULT durationIndex=SendMessageW(reelsDuration_,CB_GETCURSEL,0,0);
     const auto duration=selectedReelsDuration();
     if(duration.empty()) { MessageBoxW(hwnd_,L"Enter a valid future local date/time using YYYY-MM-DD HH:MM.",L"Invalid expiry",MB_OK|MB_ICONWARNING); return; }
     long long until=0;
@@ -349,7 +348,7 @@ void MainWindow::stopReelsSession() {
     if(!store_.isReady()) return;
     const auto mode=store_.getSetting(L"reels.mode",L"basic");
     long long until=0; try { until=std::stoll(store_.getSetting(L"reels.until",L"0")); } catch(...) {}
-    if(mode==L"strict" && until>static_cast<long long>(std::time(nullptr))) {
+    if(mode==L"strict" && (until==0 || until>static_cast<long long>(std::time(nullptr)))) {
         MessageBoxW(hwnd_,L"Strict session is locked until its timer expires. The rest of the website remains available.",L"Strict focus session",MB_OK|MB_ICONWARNING); return;
     }
     store_.setSetting(L"reels.enabled",L"0");
