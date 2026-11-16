@@ -58,7 +58,7 @@ std::wstring normalizeDomain(std::wstring input) {
     if (slash != std::wstring::npos) input.resize(slash);
     const auto colon = input.find(L':'); // discard an optional port
     if (colon != std::wstring::npos) input.resize(colon);
-    if (input.rfind(L"www.", 0) == 0) input.erase(0, 4);
+    // Preserve the exact hostname. A leading "www." is a real DNS label, not a safe alias to strip.
     while (!input.empty() && input.back() == L'.') input.pop_back();
     // Convert internationalized domain names to ASCII/Punycode before writing hosts.
     wchar_t ascii[256]{};
@@ -148,6 +148,8 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
         if (domain.empty()) continue;
         std::wstring wide(domain.begin(), domain.end());
         auto normalized = normalizeDomain(std::move(wide));
+        // Community feeds already enumerate the exact hostnames they intend to block.
+        // Do not invent www.<host> entries for subdomains such as ww.example.com.
         if (!normalized.empty()) domains.insert(std::move(normalized));
     }
     if (domains.empty()) { error = L"No valid domains were found in the downloaded list."; return false; }
@@ -290,7 +292,16 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
     std::set<std::wstring> domains;
     for (const auto& value : userDomains) {
         auto domain = normalizeDomain(value);
-        if (!domain.empty()) domains.insert(std::move(domain));
+        if (domain.empty()) continue;
+        // For manually entered sites, block both the supplied hostname and its common www alias.
+        // If the user supplied www.<host>, also include the base host without stripping other labels.
+        if (domain.rfind(L"www.", 0) == 0) {
+            domains.insert(domain.substr(4));
+            domains.insert(std::move(domain));
+        } else {
+            domains.insert(domain);
+            domains.insert(L"www." + domain);
+        }
     }
     if (includeAdultFeed) {
         std::wstring error;
@@ -298,7 +309,9 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
 
         // Supplemental adult domains that may be missing from the community feed.
         domains.insert(L"xnxx-arabic.com");
+        domains.insert(L"www.xnxx-arabic.com");
         domains.insert(L"ww.xnxx-arabic.com");
+        domains.insert(L"www.ww.xnxx-arabic.com");
     }
     if (domains.empty()) return {false, 0, L"There are no valid websites to block."};
 
@@ -320,8 +333,8 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
     updated += kBegin; updated += L"\r\n";
     updated += L"# Adult-domain list: StevenBlack/hosts (porn extension) + user rules\r\n";
     for (const auto& domain : domains) {
+        // Write each exact hostname once; www variants are added deliberately above where appropriate.
         updated += L"0.0.0.0 " + domain + L"\r\n";
-        updated += L"0.0.0.0 www." + domain + L"\r\n";
     }
     updated += kEnd; updated += L"\r\n";
     if (!writeAtomically(path, updated)) return {false, 0, L"Could not update the hosts file. The original file was not replaced."};
