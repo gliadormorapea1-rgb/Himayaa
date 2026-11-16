@@ -32,6 +32,7 @@ private:
     void toggleTheme();
     void refreshDashboard();
     void refreshStatistics();
+    void refreshHealth();
 
     HINSTANCE instance_{};
     HWND hwnd_{};
@@ -40,9 +41,10 @@ private:
     HWND pageTitle_{}, pageSubtitle_{}, categoryLabel_{}, profileLabel_{}, durationLabel_{}, inputLabel_{};
     HWND refreshButton_{}, reportButton_{}, addButton_{}, removeButton_{};
     HWND protectionDescription_{}, statsSummary_{}, settingsDescription_{}, themeToggle_{};
+    HWND healthSummary_{}, healthRefresh_{};
     HWND dashboardApps_{}, dashboardWebsites_{}, dashboardFolders_{}, dashboardDns_{};
     HWND navDashboard_{}, navApplications_{}, navWebsites_{}, navProtection_{}, navLogs_{}, navStatistics_{}, navSettings_{};
-    std::vector<HWND> managementControls_, dashboardControls_, protectionControls_, statisticsControls_, settingsControls_;
+    std::vector<HWND> managementControls_, dashboardControls_, protectionControls_, statisticsControls_, settingsControls_, healthControls_;
     int currentPage_{0};
     bool darkTheme_{true};
     std::vector<himaya::Entry> visibleEntries_;
