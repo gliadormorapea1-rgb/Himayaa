@@ -765,7 +765,7 @@ void MainWindow::refreshList() {
             return entry.profile == L"severe";
         });
     if (restoreSites_) EnableWindow(restoreSites_, websites && !strictWebsiteLock);
-    if (restoreOriginalHosts_) EnableWindow(restoreOriginalHosts_, websites && !strictWebsiteLock);
+    if (restoreOriginalHosts_) EnableWindow(restoreOriginalHosts_, websites && !strictWebsiteLock && store_.load(L"social_sites").empty());
     if (browse_) EnableWindow(browse_, selectedCategory() != L"websites" && selectedCategory()!=L"social_sites");
 }
 
@@ -867,6 +867,7 @@ void MainWindow::applyWebsites() {
     if (answer != IDYES) return;
     std::vector<std::wstring> domains;
     for(const auto& entry:store_.load(L"websites")) domains.push_back(entry.value);
+    for(const auto& entry:store_.load(L"social_sites")) domains.push_back(entry.value);
     const auto result=himaya::WebsiteBlocker::apply(domains,false);
     if(result.success) store_.logEvent(L"websites_applied",std::to_wstring(result.blockedDomains));
     std::wstring message=result.message;
@@ -937,7 +938,15 @@ void MainWindow::restoreWebsites() {
         L"Only Himaya-managed rules will be removed from the hosts file. All other entries will be preserved. Continue?",
         L"Confirm website settings restoration", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
     if (answer != IDYES) return;
-    const auto result=himaya::WebsiteBlocker::restore();
+    const auto removed=himaya::WebsiteBlocker::restore();
+    WebsiteBlockResult result=removed;
+    const auto socialEntries=store_.load(L"social_sites");
+    if(removed.success && !socialEntries.empty()) {
+        std::vector<std::wstring> socialDomains;
+        for(const auto& entry:socialEntries) socialDomains.push_back(entry.value);
+        result=himaya::WebsiteBlocker::apply(socialDomains,false);
+        if(result.success) result.message=L"Custom website rules were restored; active full-domain social locks remain enforced. "+result.message;
+    }
     if(result.success) store_.logEvent(L"websites_restored",result.message);
     setStatus(result.message);
     MessageBoxW(hwnd_,result.message.c_str(),L"Himaya Security",MB_OK|(result.success?MB_ICONINFORMATION:MB_ICONERROR));
