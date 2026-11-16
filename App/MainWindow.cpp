@@ -95,13 +95,14 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
 
         makeControl(hwnd_, L"STATIC", L"Application lock duration", SS_LEFT, 530,145,170,24,0,instance_);
         duration_ = makeControl(hwnd_, WC_COMBOBOXW, L"", CBS_DROPDOWNLIST|WS_VSCROLL, 530,172,230,220,ID_DURATION,instance_);
+        SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"2 minutes — test")); 
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Long-term — no automatic expiry"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"1 hour"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"24 hours"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"7 days"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"30 days"));
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"90 days"));
-        SendMessageW(duration_, CB_SETCURSEL, 0, 0);
+        SendMessageW(duration_, CB_SETCURSEL, 1, 0);
 
         input_ = makeControl(hwnd_, L"EDIT", L"", WS_BORDER|ES_AUTOHSCROLL, 30,220,610,36,ID_INPUT,instance_);
         browse_ = makeControl(hwnd_, L"BUTTON", L"Browse...", BS_PUSHBUTTON, 650,220,130,36,ID_BROWSE,instance_);
@@ -184,7 +185,7 @@ std::wstring MainWindow::selectedCategory() const {
 
 std::wstring MainWindow::selectedDuration() const {
     const LRESULT index = SendMessageW(duration_, CB_GETCURSEL, 0, 0);
-    switch (index) { case 1: return L"1h"; case 2: return L"24h"; case 3: return L"7d"; case 4: return L"30d"; case 5: return L"90d"; default: return L"long"; }
+    switch (index) { case 0: return L"2m"; case 2: return L"1h"; case 3: return L"24h"; case 4: return L"7d"; case 5: return L"30d"; case 6: return L"90d"; default: return L"long"; }
 }
 
 std::wstring MainWindow::selectedProfile() const {
@@ -204,14 +205,19 @@ void MainWindow::refreshList() {
     visibleEntries_ = store_.load(selectedCategory());
     for (const auto& entry : visibleEntries_) {
         std::wstring label = entry.value;
-        if (selectedCategory() == L"applications") {
-            label += entry.lockMode == L"long" ? L"   |   Long-term lock (enforced by the protection service)" : L"   |   Temporary lock (enforced by the protection service)";
+        if (selectedCategory() == L"applications" || selectedCategory() == L"websites") {
+            label += entry.profile == L"severe" ? L"   |   STRICT — locked until expiry" : L"   |   " ;
+            label += entry.lockMode == L"long" ? L"Long-term" : (entry.lockMode == L"2m" ? L"2-minute test" : L"Timed lock");
         }
         SendMessageW(list_, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
     }
     if (applySites_) EnableWindow(applySites_, selectedCategory() == L"websites");
-    if (restoreSites_) EnableWindow(restoreSites_, selectedCategory() == L"websites");
-    if (restoreOriginalHosts_) EnableWindow(restoreOriginalHosts_, selectedCategory() == L"websites");
+    const bool strictWebsiteLock = selectedCategory() == L"websites" &&
+        std::any_of(visibleEntries_.begin(), visibleEntries_.end(), [](const himaya::Entry& entry) {
+            return entry.profile == L"severe";
+        });
+    if (restoreSites_) EnableWindow(restoreSites_, selectedCategory() == L"websites" && !strictWebsiteLock);
+    if (restoreOriginalHosts_) EnableWindow(restoreOriginalHosts_, selectedCategory() == L"websites" && !strictWebsiteLock);
     if (browse_) EnableWindow(browse_, selectedCategory() != L"websites");
 }
 
@@ -281,7 +287,7 @@ void MainWindow::addEntry() {
             L"Confirm folder access restriction",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2);
         if(answer!=IDYES) return;
     }
-    const auto duration = category == L"applications" ? selectedDuration() : L"long";
+    const auto duration = (category == L"applications" || category == L"websites") ? selectedDuration() : L"long";
     if (store_.addEntry(category, value, duration, selectedProfile())) {
         SetWindowTextW(input_, L""); refreshList();
         setStatus(category == L"websites" ? L"Website saved. Click Apply website blocking to activate the rules with administrator privileges." :
@@ -296,7 +302,11 @@ void MainWindow::removeEntry() {
     const LRESULT index = SendMessageW(list_, LB_GETCURSEL, 0, 0);
     if (index == LB_ERR || static_cast<size_t>(index) >= visibleEntries_.size()) return;
     if (store_.removeEntry(selectedCategory(), visibleEntries_[static_cast<size_t>(index)].value)) {
-        refreshList(); setStatus(L"Rule removed. The service will remove the execution block and restore folder permissions during its next synchronization.");
+        refreshList(); setStatus(L"Rule removed. The protection service will synchronize the change.");
+    } else {
+        const auto error = store_.lastError();
+        MessageBoxW(hwnd_, error.empty() ? L"Could not remove this rule." : error.c_str(),
+                    L"Strict-mode protection", MB_OK | MB_ICONWARNING);
     }
 }
 
