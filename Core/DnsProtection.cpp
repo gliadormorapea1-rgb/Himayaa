@@ -199,8 +199,17 @@ constexpr wchar_t kScriptPart2[] = LR"PS(function Backup-Settings {
 
 )PS";
 constexpr wchar_t kScriptPart3[] = LR"PS(function Remove-LegacySocialBlocks {
-  # Remove only the exact full-domain entries added by older Himaya releases.
-  # Existing entries found in the pre-Himaya policy backup are deliberately retained.
+  # Remove only entries proven to have been added by the older Himaya release.
+  # The validated pre-Himaya backup is the source of truth for preserving user policy.
+  if (-not (Test-Path -LiteralPath $backupFile)) {
+    Write-Log 'No original browser-policy backup exists; no URL block entries were changed.'
+    return
+  }
+  $backupMetadata = Get-Content -LiteralPath $backupFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+  if ($null -eq $backupMetadata -or $null -eq $backupMetadata.PolicyKeys) {
+    Write-Log 'The original browser-policy metadata is unavailable; no URL block entries were changed.'
+    return
+  }
   $chromiumValues = @(
     'youtube.com','instagram.com','facebook.com','snapchat.com','tiktok.com',
     'likee.video','kwai.com','x.com','twitter.com','reddit.com','threads.net',
@@ -214,18 +223,24 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Remove-LegacySocialBlocks {
     '*://*.tumblr.com/*'
   )
   $targets = @(
-    @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge\URLBlocklist'; Backup='policy-0.reg'; Values=$chromiumValues },
-    @{ Path='HKLM:\SOFTWARE\Policies\Google\Chrome\URLBlocklist'; Backup='policy-1.reg'; Values=$chromiumValues },
-    @{ Path='HKLM:\SOFTWARE\Policies\BraveSoftware\Brave\URLBlocklist'; Backup='policy-3.reg'; Values=$chromiumValues },
-    @{ Path='HKLM:\SOFTWARE\Policies\Mozilla\Firefox\WebsiteFilter\Block'; Backup='policy-2.reg'; Values=$firefoxValues }
+    @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge\URLBlocklist'; PolicyKey='HKLM\SOFTWARE\Policies\Microsoft\Edge'; Backup='policy-0.reg'; Values=$chromiumValues },
+    @{ Path='HKLM:\SOFTWARE\Policies\Google\Chrome\URLBlocklist'; PolicyKey='HKLM\SOFTWARE\Policies\Google\Chrome'; Backup='policy-1.reg'; Values=$chromiumValues },
+    @{ Path='HKLM:\SOFTWARE\Policies\BraveSoftware\Brave\URLBlocklist'; PolicyKey='HKLM\SOFTWARE\Policies\BraveSoftware\Brave'; Backup='policy-3.reg'; Values=$chromiumValues },
+    @{ Path='HKLM:\SOFTWARE\Policies\Mozilla\Firefox\WebsiteFilter\Block'; PolicyKey='HKLM\SOFTWARE\Policies\Mozilla\Firefox'; Backup='policy-2.reg'; Values=$firefoxValues }
   )
   $removed = 0
   foreach ($target in $targets) {
     if (-not (Test-Path -LiteralPath $target.Path)) { continue }
-    $backupPath = Join-Path $root $target.Backup
+    $policyRecord = @($backupMetadata.PolicyKeys | Where-Object { $_.Key -eq $target.PolicyKey } | Select-Object -First 1)
+    if ($policyRecord.Count -eq 0) { continue }
     $backupText = ''
-    if (Test-Path -LiteralPath $backupPath) {
-      $backupText = Get-Content -LiteralPath $backupPath -Raw -ErrorAction Stop
+    if ([bool]$policyRecord[0].Exists) {
+      $policyBackupPath = Join-Path $root $target.Backup
+      if (-not (Test-Path -LiteralPath $policyBackupPath)) {
+        Write-Log "Skipped $($target.Path): its original policy backup is missing."
+        continue
+      }
+      $backupText = Get-Content -LiteralPath $policyBackupPath -Raw -ErrorAction Stop
     }
     $properties = Get-ItemProperty -LiteralPath $target.Path -ErrorAction Stop
     foreach ($property in @($properties.PSObject.Properties)) {
