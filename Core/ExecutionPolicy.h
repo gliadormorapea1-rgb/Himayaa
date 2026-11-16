@@ -9,5 +9,7 @@ public:
     // Applies exact executable rules and folder execution rules through Windows SRP.
     // Must be called by the LocalSystem HimayaGuard service.
     static PolicySyncResult synchronize(ConfigStore& store);
+    // Removes Himaya-managed execution rules and restores saved folder ACLs.
+    static PolicySyncResult restoreAll();
 };
 }
