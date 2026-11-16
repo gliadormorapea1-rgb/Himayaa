@@ -525,7 +525,7 @@ DnsProtectionResult run(const wchar_t* mode){
   }
   return {true,std::wstring(mode)==L"Restore"
     ?L"Original DNS and browser policy settings restored; Himaya DNS firewall rules removed."
-    :L"CleanBrowsing Family DNS, managed social short-video URL blocks, browser DNS policies and DNS firewall protections applied."};
+    :L"CleanBrowsing Family DNS, managed social-platform blocks, browser DNS policies and DNS firewall protections applied."};
 }
 }
 DnsProtectionResult DnsProtection::enable(){return run(L"Enable");}
