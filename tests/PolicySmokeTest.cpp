@@ -2,6 +2,7 @@
 #include "../Core/ExecutionPolicy.h"
 #include <windows.h>
 #include <string>
+#include <vector>
 
 namespace {
 bool registryContains(const std::wstring& expected) {
@@ -75,5 +76,22 @@ int wmain() {
     const bool accessRestored=accessible!=INVALID_HANDLE_VALUE;
     if(accessible!=INVALID_HANDLE_VALUE) CloseHandle(accessible);
     DeleteFileW(child.c_str());RemoveDirectoryW(folder.c_str());
-    return folderRestored.success && accessRestored ? 0 : 23;
+    if (!folderRestored.success || !accessRestored) return 23;
+
+    const std::wstring reportPath=std::wstring(temp)+L"Himaya-Activity-Smoke.csv";
+    DeleteFileW(reportPath.c_str());
+    if (!store.logEvent(L"policy_smoke_csv",L"CSV export verification")) return 24;
+    if (!store.exportEventsCsv(reportPath)) return 25;
+    HANDLE report=CreateFileW(reportPath.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(report==INVALID_HANDLE_VALUE){DeleteFileW(reportPath.c_str());return 26;}
+    LARGE_INTEGER reportSize{};
+    const bool sizeOk=GetFileSizeEx(report,&reportSize) && reportSize.QuadPart>16 && reportSize.QuadPart<4*1024*1024;
+    std::string reportBytes(sizeOk?static_cast<size_t>(reportSize.QuadPart):0,'\\0');
+    DWORD reportRead=0;
+    const bool readOk=sizeOk && ReadFile(report,reportBytes.data(),static_cast<DWORD>(reportBytes.size()),&reportRead,nullptr) &&
+                      reportRead==reportBytes.size();
+    CloseHandle(report);
+    DeleteFileW(reportPath.c_str());
+    return readOk && reportBytes.find("policy_smoke_csv")!=std::string::npos ? 0 : 27;
 }
