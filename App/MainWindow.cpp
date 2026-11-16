@@ -2,23 +2,30 @@
 #include "Core/WebsiteBlocker.h"
 #include <shellapi.h>
 #include <commctrl.h>
+#include <commdlg.h>
+#include <shlobj.h>
+#include <dwmapi.h>
+#include <uxtheme.h>
 #include <string>
 #include <iterator>
 
 namespace {
 constexpr wchar_t kClassName[] = L"HimayaMainWindow";
 enum : int { ID_CATEGORY=1001, ID_LIST=1002, ID_INPUT=1003, ID_ADD=1004, ID_REMOVE=1005,
-             ID_REFRESH=1006, ID_PROFILE=1007, ID_DURATION=1008, ID_APPLY_SITES=1009, ID_RESTORE_SITES=1010 };
+             ID_REFRESH=1006, ID_PROFILE=1007, ID_DURATION=1008, ID_APPLY_SITES=1009, ID_RESTORE_SITES=1010, ID_BROWSE=1011 };
 HWND makeControl(HWND parent, const wchar_t* cls, const wchar_t* text, DWORD style,
                  int x,int y,int w,int h,int id,HINSTANCE inst) {
     return CreateWindowExW(0, cls, text, WS_CHILD|WS_VISIBLE|style, x,y,w,h,parent,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),inst,nullptr);
 }
-void setFont(HWND control) {
-    static HFONT font = CreateFontW(-18,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
+HBRUSH backgroundBrush() { static HBRUSH brush=CreateSolidBrush(RGB(18,23,32)); return brush; }
+HBRUSH inputBrush() { static HBRUSH brush=CreateSolidBrush(RGB(31,39,52)); return brush; }
+HFONT uiFont() {
+    static HFONT font=CreateFontW(-18,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
         OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH|FF_DONTCARE,L"Segoe UI");
-    SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+    return font;
 }
+void setFont(HWND control) { SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(uiFont()), TRUE); }
 }
 
 MainWindow::MainWindow(HINSTANCE instance) : instance_(instance) {}
@@ -27,12 +34,14 @@ bool MainWindow::create(int showCommand) {
     WNDCLASSW wc{};
     wc.lpfnWndProc = windowProc; wc.hInstance = instance_; wc.lpszClassName = kClassName;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wc.hbrBackground = backgroundBrush();
     wc.style = CS_HREDRAW | CS_VREDRAW;
     if (!RegisterClassW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
     hwnd_ = CreateWindowExW(0, kClassName, L"Himaya Security | حماية رقمية", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 1060, 820, nullptr, nullptr, instance_, this);
     if (!hwnd_) return false;
+    const BOOL darkTitleBar=TRUE;
+    DwmSetWindowAttribute(hwnd_,20,&darkTitleBar,sizeof(darkTitleBar));
     ShowWindow(hwnd_, showCommand); UpdateWindow(hwnd_); return true;
 }
 
@@ -92,15 +101,21 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         SendMessageW(duration_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"90 يومًا"));
         SendMessageW(duration_, CB_SETCURSEL, 0, 0);
 
-        input_ = makeControl(hwnd_, L"EDIT", L"", WS_BORDER|ES_AUTOHSCROLL, 30,220,720,32,ID_INPUT,instance_);
-        makeControl(hwnd_, L"BUTTON", L"إضافة إلى القائمة", BS_PUSHBUTTON, 770,220,220,32,ID_ADD,instance_);
+        input_ = makeControl(hwnd_, L"EDIT", L"", WS_BORDER|ES_AUTOHSCROLL, 30,220,610,36,ID_INPUT,instance_);
+        browse_ = makeControl(hwnd_, L"BUTTON", L"استعراض...", BS_PUSHBUTTON, 650,220,130,36,ID_BROWSE,instance_);
+        makeControl(hwnd_, L"BUTTON", L"إضافة للقائمة", BS_PUSHBUTTON, 790,220,200,36,ID_ADD,instance_);
         list_ = makeControl(hwnd_, WC_LISTBOXW, L"", WS_BORDER|LBS_NOTIFY|WS_VSCROLL, 30,275,960,300,ID_LIST,instance_);
         makeControl(hwnd_, L"BUTTON", L"حذف المحدد من القائمة", BS_PUSHBUTTON, 30,590,220,36,ID_REMOVE,instance_);
         makeControl(hwnd_, L"BUTTON", L"تحديث القائمة", BS_PUSHBUTTON, 265,590,140,36,ID_REFRESH,instance_);
         applySites_ = makeControl(hwnd_, L"BUTTON", L"تطبيق حظر المواقع الإباحية والمخصصة", BS_PUSHBUTTON, 30,640,360,38,ID_APPLY_SITES,instance_);
         restoreSites_ = makeControl(hwnd_, L"BUTTON", L"استعادة إعدادات المواقع", BS_PUSHBUTTON, 405,640,260,38,ID_RESTORE_SITES,instance_);
         summary_ = makeControl(hwnd_, L"STATIC", L"قاعدة البيانات: جاري التحميل...", SS_LEFT, 30,690,960,26,0,instance_);
-        status_ = makeControl(hwnd_, L"STATIC", L"حظر المواقع يستخدم ملف hosts وقائمة مجتمعية؛ قد تتجاوزه بعض إعدادات DNS المشفرة. حظر التطبيقات لم يُفعّل بعد.", SS_LEFT, 30,725,960,40,0,instance_);
+        status_ = makeControl(hwnd_, L"STATIC", L"حظر المواقع يستخدم ملف hosts. خدمة HimayaGuard تطبق قواعد منع تشغيل التطبيقات والملفات داخل المجلدات المحددة.", SS_LEFT, 30,725,960,40,0,instance_);
+        EnumChildWindows(hwnd_, [](HWND child, LPARAM font) -> BOOL {
+            SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
+            SetWindowTheme(child,L"DarkMode_Explorer",nullptr);
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(uiFont()));
         if (!store_.isReady()) {
             MessageBoxW(hwnd_, store_.lastError().c_str(), L"تعذر فتح قاعدة البيانات", MB_OK|MB_ICONERROR);
         }
@@ -113,12 +128,34 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         case ID_CATEGORY: if (HIWORD(wp)==CBN_SELCHANGE) refreshList(); return 0;
         case ID_PROFILE: if (HIWORD(wp)==CBN_SELCHANGE) saveProfile(); return 0;
         case ID_ADD: addEntry(); return 0;
+        case ID_BROWSE: browseEntry(); return 0;
         case ID_REMOVE: removeEntry(); return 0;
         case ID_REFRESH: refreshList(); return 0;
         case ID_APPLY_SITES: applyWebsites(); return 0;
         case ID_RESTORE_SITES: restoreWebsites(); return 0;
         }
         break;
+    case WM_ERASEBKGND: {
+        RECT rc{}; GetClientRect(hwnd_,&rc);
+        FillRect(reinterpret_cast<HDC>(wp),&rc,backgroundBrush());
+        return 1;
+    }
+    case WM_CTLCOLORSTATIC: {
+        HDC dc=reinterpret_cast<HDC>(wp);
+        SetTextColor(dc,RGB(231,236,244)); SetBkMode(dc,TRANSPARENT);
+        return reinterpret_cast<LRESULT>(backgroundBrush());
+    }
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORLISTBOX: {
+        HDC dc=reinterpret_cast<HDC>(wp);
+        SetTextColor(dc,RGB(238,242,248)); SetBkColor(dc,RGB(31,39,52));
+        return reinterpret_cast<LRESULT>(inputBrush());
+    }
+    case WM_CTLCOLORBTN: {
+        HDC dc=reinterpret_cast<HDC>(wp);
+        SetTextColor(dc,RGB(238,242,248)); SetBkMode(dc,TRANSPARENT);
+        return reinterpret_cast<LRESULT>(backgroundBrush());
+    }
     case WM_DESTROY: PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(hwnd_, msg, wp, lp);
@@ -160,6 +197,31 @@ void MainWindow::refreshList() {
     }
     if (applySites_) EnableWindow(applySites_, selectedCategory() == L"websites");
     if (restoreSites_) EnableWindow(restoreSites_, selectedCategory() == L"websites");
+    if (browse_) EnableWindow(browse_, selectedCategory() != L"websites");
+}
+
+void MainWindow::browseEntry() {
+    const auto category=selectedCategory();
+    if(category==L"applications") {
+        wchar_t path[32768]{};
+        OPENFILENAMEW dialog{}; dialog.lStructSize=sizeof(dialog); dialog.hwndOwner=hwnd_;
+        dialog.lpstrFilter=L"ملفات البرامج (*.exe)\0*.exe\0كل الملفات (*.*)\0*.*\0\0";
+        dialog.lpstrFile=path; dialog.nMaxFile=static_cast<DWORD>(std::size(path));
+        dialog.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_HIDEREADONLY;
+        dialog.lpstrTitle=L"اختر التطبيق الذي تريد حظره";
+        if(GetOpenFileNameW(&dialog)) SetWindowTextW(input_,path);
+        return;
+    }
+    if(category==L"paths") {
+        BROWSEINFOW dialog{}; dialog.hwndOwner=hwnd_; dialog.lpszTitle=L"اختر المجلد الذي تريد منع تشغيل الملفات منه";
+        dialog.ulFlags=BIF_RETURNONLYFSDIRS|BIF_NEWDIALOGSTYLE|BIF_EDITBOX;
+        PIDLIST_ABSOLUTE item=SHBrowseForFolderW(&dialog);
+        if(item) {
+            wchar_t path[MAX_PATH]{};
+            if(SHGetPathFromIDListW(item,path)) SetWindowTextW(input_,path);
+            CoTaskMemFree(item);
+        }
+    }
 }
 
 void MainWindow::addEntry() {
@@ -167,6 +229,17 @@ void MainWindow::addEntry() {
     GetWindowTextW(input_, value, static_cast<int>(std::size(value)));
     if (!value[0]) { MessageBoxW(hwnd_, L"اكتب اسم التطبيق أو الموقع أو المسار أولاً.", L"Himaya", MB_OK|MB_ICONINFORMATION); return; }
     const auto category = selectedCategory();
+    const DWORD attributes=GetFileAttributesW(value);
+    if(category==L"applications" &&
+       (attributes==INVALID_FILE_ATTRIBUTES || (attributes&FILE_ATTRIBUTE_DIRECTORY))) {
+        MessageBoxW(hwnd_,L"اختر ملف برنامج موجودًا بامتداد EXE من زر استعراض.",L"مسار التطبيق غير صالح",MB_OK|MB_ICONWARNING);
+        return;
+    }
+    if(category==L"paths" &&
+       (attributes==INVALID_FILE_ATTRIBUTES || !(attributes&FILE_ATTRIBUTE_DIRECTORY))) {
+        MessageBoxW(hwnd_,L"اختر مجلدًا موجودًا من زر استعراض.",L"مسار المجلد غير صالح",MB_OK|MB_ICONWARNING);
+        return;
+    }
     const auto duration = category == L"applications" ? selectedDuration() : L"long";
     if (store_.addEntry(category, value, duration, selectedProfile())) {
         SetWindowTextW(input_, L""); refreshList();
