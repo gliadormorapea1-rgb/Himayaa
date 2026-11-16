@@ -353,15 +353,20 @@ try {
         $effectiveXmlText = Get-AppLockerPolicy -Effective -Xml -ErrorAction Stop
         [xml]$effectiveXmlDoc = [string]$effectiveXmlText
         $effectiveExeNode = $effectiveXmlDoc.DocumentElement.SelectSingleNode("RuleCollection[@Type='Exe']")
-        if ($null -eq $effectiveExeNode) { throw 'The effective AppLocker policy has no EXE rule collection.' }
-        if ($effectiveExeNode.GetAttribute('EnforcementMode') -eq 'AuditOnly') {
-            throw 'The effective AppLocker EXE collection is Audit only; Windows will log but not block applications.'
-        }
-        $effectivePolicy = Get-AppLockerPolicy -Effective -ErrorAction Stop
-        foreach ($item in $requested) {
-            if ($item[1].EndsWith('\*')) { continue }
-            $decision = @(Test-AppLockerPolicy -PolicyObject $effectivePolicy -Path $item[1] -User $item[0] -Filter Denied -ErrorAction Stop)
-            if ($decision.Count -eq 0) { throw ('The effective AppLocker policy does not deny the requested executable: '+$item[1]) }
+        if ($null -eq $effectiveExeNode) {
+            if ($requested.Count -gt 0) {
+                throw 'The effective AppLocker policy has no EXE rule collection while application blocks are requested.'
+            }
+        } elseif ($requested.Count -gt 0) {
+            if ($effectiveExeNode.GetAttribute('EnforcementMode') -eq 'AuditOnly') {
+                throw 'The effective AppLocker EXE collection is Audit only; Windows will log but not block applications.'
+            }
+            $effectivePolicy = Get-AppLockerPolicy -Effective -ErrorAction Stop
+            foreach ($item in $requested) {
+                if ($item[1].EndsWith('\*')) { continue }
+                $decision = @(Test-AppLockerPolicy -PolicyObject $effectivePolicy -Path $item[1] -User $item[0] -Filter Denied -ErrorAction Stop)
+                if ($decision.Count -eq 0) { throw ('The effective AppLocker policy does not deny the requested executable: '+$item[1]) }
+            }
         }
     }
     exit 0
