@@ -335,6 +335,13 @@ try {
         if ($wasDisabled) { Disable-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop | Out-Null }
     }
     if (-not $RestoreOnly) {
+        $effectiveXmlText = Get-AppLockerPolicy -Effective -Xml -ErrorAction Stop
+        [xml]$effectiveXmlDoc = [string]$effectiveXmlText
+        $effectiveExeNode = $effectiveXmlDoc.DocumentElement.SelectSingleNode("RuleCollection[@Type='Exe']")
+        if ($null -eq $effectiveExeNode) { throw 'The effective AppLocker policy has no EXE rule collection.' }
+        if ($effectiveExeNode.GetAttribute('EnforcementMode') -eq 'AuditOnly') {
+            throw 'The effective AppLocker EXE collection is Audit only; Windows will log but not block applications.'
+        }
         $effectivePolicy = Get-AppLockerPolicy -Effective -ErrorAction Stop
         foreach ($item in $requested) {
             if ($item[1].EndsWith('\*')) { continue }
