@@ -188,7 +188,7 @@ bool readBackup(const std::wstring& id,std::wstring& path,std::wstring& sddl) {
         if(RegQueryValueExW(child,name,nullptr,&type,nullptr,&bytes)!=ERROR_SUCCESS || type!=REG_SZ || bytes<sizeof(wchar_t)) return false;
         out.resize(bytes/sizeof(wchar_t));
         if(RegQueryValueExW(child,name,nullptr,&type,reinterpret_cast<BYTE*>(out.data()),&bytes)!=ERROR_SUCCESS) return false;
-        if(!out.empty() && out.back()==L'\\0') out.pop_back();
+        if(!out.empty() && out.back()==L'\0') out.pop_back();
         return true;
     };
     const bool ok=read(L"Path",path)&&read(L"OriginalSddl",sddl);
@@ -228,7 +228,7 @@ bool usersDenyAcePresent(PACL dacl,PSID usersSid) {
 bool applyFolderAccessDeny(const std::wstring& path) {
     const auto id=ruleId(path);
     if(!saveBackup(id,path)) return false;
-    PSID owner=nullptr,group=nullptr;PACL oldDacl=nullptr;PSECURITY_DESCRIPTOR descriptor=nullptr;
+    PACL oldDacl=nullptr;PSECURITY_DESCRIPTOR descriptor=nullptr;
     const DWORD query=GetNamedSecurityInfoW(const_cast<LPWSTR>(path.c_str()),SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION,nullptr,nullptr,&oldDacl,nullptr,&descriptor);
     if(query!=ERROR_SUCCESS) return false;
