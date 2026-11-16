@@ -35,6 +35,46 @@ jobs:
           }
           Write-Host "Canonical source validated from repository root."
 
+      - name: Validate embedded DNS PowerShell syntax
+        shell: pwsh
+        run: |
+          $source = Get-Content "Core/DnsProtection.cpp" -Raw
+          $matches = [regex]::Matches(
+            $source,
+            'LR"PS\((?<script>.*?)\)PS";',
+            [System.Text.RegularExpressions.RegexOptions]::Singleline
+          )
+          if ($matches.Count -ne 4) { throw "Expected exactly four embedded DNS PowerShell script parts." }
+          $scriptText = ($matches | ForEach-Object { $_.Groups["script"].Value }) -join ""
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseInput(
+            $scriptText,
+            [ref]$tokens,
+            [ref]$parseErrors
+          ) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | Format-List * | Out-String -Width 4096 | Write-Host
+            throw "Embedded DNS PowerShell syntax validation failed."
+          }
+          if ($scriptText.IndexOf("Get-AddressFamilyName") -lt 0 -or
+              $scriptText.IndexOf("'^(2|IPv4|InterNetwork)$'") -lt 0) {
+            throw "DNS address-family normalization is missing."
+          }
+          if ($scriptText -match 'Set-DnsClientServerAddress[^\r\n]*-AddressFamily') {
+            throw "Unsupported -AddressFamily parameter found on Set-DnsClientServerAddress."
+          }
+          if ($scriptText -match 'Get-NetAdapter[^\r\n]*-InterfaceIndex') {
+            throw "Unsupported -InterfaceIndex parameter found on Get-NetAdapter."
+          }
+          if ($scriptText.IndexOf("Repairing empty legacy backup") -lt 0) {
+            throw "Safe migration for the previous empty DNS backup is missing."
+          }
+          if ($scriptText.IndexOf("Automatic rollback skipped because the backup is legacy") -lt 0) {
+            throw "Rollback must preserve an unvalidated legacy backup."
+          }
+          Write-Host "Embedded DNS PowerShell parsed successfully; static safety checks passed; no live DNS settings were changed."
+
       - name: Configure x64 Release
         run: cmake -S . -B build -A x64
 
