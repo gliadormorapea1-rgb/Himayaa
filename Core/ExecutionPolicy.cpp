@@ -2,6 +2,9 @@
 #include "ConfigStore.h"
 #include <windows.h>
 #include <algorithm>
+#include <cwctype>
+#include <cwchar>
+#include <iterator>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -109,7 +112,7 @@ bool addRule(const Rule& rule) {
     RegCloseKey(child); return ok;
 }
 }
-PolicySyncResult ExecutionPolicy::synchronize(const ConfigStore& store) {
+PolicySyncResult ExecutionPolicy::synchronize(ConfigStore& store) {
     if(!store.isReady()) return {false,0,L"قاعدة بيانات Himaya غير متاحة للخدمة."};
     std::vector<Rule> rules;
     for(const auto& e:store.load(L"applications")) {
