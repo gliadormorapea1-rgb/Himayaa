@@ -1,10 +1,30 @@
 #include "../Core/ConfigStore.h"
 #include "../Core/ExecutionPolicy.h"
+#include "../Core/WebsiteBlocker.h"
 #include <windows.h>
 #include <string>
 #include <vector>
 
 namespace {
+bool hostsContains(const char* needle) {
+    wchar_t system[MAX_PATH]{};
+    const UINT length=GetSystemDirectoryW(system,MAX_PATH);
+    if(!length || length>=MAX_PATH) return false;
+    const std::wstring path=std::wstring(system)+L"\\drivers\\etc\\hosts";
+    HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
+                            OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(file==INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER size{};
+    if(!GetFileSizeEx(file,&size) || size.QuadPart<0 || size.QuadPart>32*1024*1024) {
+        CloseHandle(file); return false;
+    }
+    std::string bytes(static_cast<size_t>(size.QuadPart),'\\0');
+    DWORD read=0;
+    const bool ok=ReadFile(file,bytes.data(),static_cast<DWORD>(bytes.size()),&read,nullptr) &&
+                  read==bytes.size();
+    CloseHandle(file);
+    return ok && bytes.find(needle)!=std::string::npos;
+}
 bool registryContains(const std::wstring& expected) {
     HKEY key=nullptr;
     if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,
@@ -40,6 +60,16 @@ int wmain() {
     DWORD written=0;WriteFile(file,bytes,2,&written,nullptr);CloseHandle(file);
     if(written!=2) {DeleteFileW(testPath.c_str());return 12;}
     himaya::ConfigStore store;
+    auto websiteApplied=himaya::WebsiteBlocker::apply({},false);
+    const bool websiteRulesPresent=websiteApplied.success &&
+        hostsContains("0.0.0.0 www.xnxx-arabic.com") &&
+        hostsContains("0.0.0.0 xnxx-arabic.com") &&
+        hostsContains(":: www.xnxx-arabic.com") &&
+        hostsContains(":: xnxx-arabic.com");
+    const auto websiteRestored=himaya::WebsiteBlocker::restoreOriginal();
+    if(!websiteRulesPresent || !websiteRestored.success) return 28;
+
+
     if(!store.isReady()) {DeleteFileW(testPath.c_str());return 13;}
     store.removeEntry(L"applications",testPath);
     if(!store.addEntry(L"applications",testPath,L"long",L"simple")) {DeleteFileW(testPath.c_str());return 14;}
