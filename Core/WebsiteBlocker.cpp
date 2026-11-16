@@ -77,17 +77,17 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
     parts.lpszUrlPath = pathBuffer;
     parts.dwUrlPathLength = static_cast<DWORD>(std::size(pathBuffer));
     if (!WinHttpCrackUrl(kAdultFeed, 0, 0, &parts)) {
-        error = L"تعذر تحليل عنوان قائمة المواقع.";
+        error = L"Could not parse the website list URL.";
         return false;
     }
     const std::wstring host(parts.lpszHostName, parts.dwHostNameLength);
     const std::wstring path(parts.lpszUrlPath, parts.dwUrlPathLength);
     HINTERNET session = WinHttpOpen(L"Himaya Security/0.3", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!session) { error = L"تعذر بدء اتصال تحديث قائمة المواقع."; return false; }
+    if (!session) { error = L"Could not start the website list update connection."; return false; }
     WinHttpSetTimeouts(session, 10000, 10000, 20000, 30000);
     HINTERNET connection = WinHttpConnect(session, host.c_str(), parts.nPort, 0);
-    if (!connection) { WinHttpCloseHandle(session); error = L"تعذر الاتصال بمصدر قائمة المواقع."; return false; }
+    if (!connection) { WinHttpCloseHandle(session); error = L"Could not connect to the website list source."; return false; }
     HINTERNET request = WinHttpOpenRequest(connection, L"GET", path.c_str(), nullptr,
         WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
         parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
@@ -95,7 +95,7 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
         WINHTTP_NO_REQUEST_DATA, 0, 0, 0) || !WinHttpReceiveResponse(request, nullptr)) {
         if (request) WinHttpCloseHandle(request);
         WinHttpCloseHandle(connection); WinHttpCloseHandle(session);
-        error = L"فشل تنزيل قائمة المواقع الإباحية. تحقق من اتصال الإنترنت ثم حاول مجددًا.";
+        error = L"Failed to download the adult website list. Check your internet connection and try again.";
         return false;
     }
     DWORD status = 0, statusSize = sizeof(status);
@@ -103,7 +103,7 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
                         WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
     if (status != 200) {
         WinHttpCloseHandle(request); WinHttpCloseHandle(connection); WinHttpCloseHandle(session);
-        error = L"مصدر قائمة المواقع لم يُرجع استجابة ناجحة.";
+        error = L"The website list source returned an unsuccessful response.";
         return false;
     }
 
@@ -112,13 +112,13 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
         DWORD available = 0;
         if (!WinHttpQueryDataAvailable(request, &available)) {
             WinHttpCloseHandle(request); WinHttpCloseHandle(connection); WinHttpCloseHandle(session);
-            error = L"انقطع الاتصال أثناء قراءة قائمة المواقع.";
+            error = L"The connection was interrupted while reading the website list.";
             return false;
         }
         if (available == 0) break;
         if (body.size() + available > 20u * 1024u * 1024u) {
             WinHttpCloseHandle(request); WinHttpCloseHandle(connection); WinHttpCloseHandle(session);
-            error = L"حجم قائمة المواقع أكبر من الحد الآمن المسموح به.";
+            error = L"The website list exceeds the safe size limit.";
             return false;
         }
         const size_t offset = body.size();
@@ -129,14 +129,14 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
             if (!WinHttpReadData(request, body.data() + offset + totalRead,
                                  available - totalRead, &read) || read == 0) {
                 WinHttpCloseHandle(request); WinHttpCloseHandle(connection); WinHttpCloseHandle(session);
-                error = L"حدث خطأ أثناء قراءة قائمة المواقع.";
+                error = L"An error occurred while reading the website list.";
                 return false;
             }
             totalRead += read;
         }
     }
     WinHttpCloseHandle(request); WinHttpCloseHandle(connection); WinHttpCloseHandle(session);
-    if (body.empty()) { error = L"قائمة المواقع التي تم تنزيلها فارغة."; return false; }
+    if (body.empty()) { error = L"The downloaded website list is empty."; return false; }
 
     std::istringstream stream(body);
     std::string line;
@@ -150,7 +150,7 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
         auto normalized = normalizeDomain(std::move(wide));
         if (!normalized.empty()) domains.insert(std::move(normalized));
     }
-    if (domains.empty()) { error = L"لم يتم استخراج أي نطاق صالح من القائمة."; return false; }
+    if (domains.empty()) { error = L"No valid domains were found in the downloaded list."; return false; }
     return true;
 }
 
@@ -286,7 +286,7 @@ bool WebsiteBlocker::isAdministrator() {
 }
 
 WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDomains, bool includeAdultFeed) {
-    if (!isAdministrator()) return {false, 0, L"يلزم تشغيل إجراء تطبيق الحظر بصلاحيات المسؤول."};
+    if (!isAdministrator()) return {false, 0, L"Administrator privileges are required to apply website blocking."};
     std::set<std::wstring> domains;
     for (const auto& value : userDomains) {
         auto domain = normalizeDomain(value);
@@ -296,21 +296,21 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
         std::wstring error;
         if (!downloadAdultFeed(domains, error)) return {false, 0, error};
     }
-    if (domains.empty()) return {false, 0, L"لا توجد مواقع صالحة لتطبيق الحظر."};
+    if (domains.empty()) return {false, 0, L"There are no valid websites to block."};
 
     const auto path = hostsPath();
     std::wstring current;
-    if (path.empty() || !readFile(path, current)) return {false, 0, L"تعذر قراءة ملف hosts في Windows."};
+    if (path.empty() || !readFile(path, current)) return {false, 0, L"Could not read the Windows hosts file."};
     // Keep one untouched copy from before Himaya first modifies this file.
     const std::wstring backupPath = path + L".himaya-original.bak";
     if (GetFileAttributesW(backupPath.c_str()) == INVALID_FILE_ATTRIBUTES &&
         !CopyFileW(path.c_str(), backupPath.c_str(), TRUE)) {
-        return {false, 0, L"تعذر إنشاء نسخة احتياطية من ملف hosts؛ لم يتم تطبيق أي تغيير."};
+        return {false, 0, L"Could not create a backup of the hosts file. No changes were made."};
     }
     std::wstring updated;
     bool hadManagedBlock = false;
     if (!removeManagedBlock(current, updated, hadManagedBlock))
-        return {false, 0, L"علامات Himaya داخل ملف hosts غير مكتملة أو مكررة. لم يتم تعديل الملف لحماية إعداداتك."};
+        return {false, 0, L"Himaya markers in the hosts file are incomplete or duplicated. The file was not modified to protect your settings."};
     (void)hadManagedBlock;
     if (!updated.empty() && updated.back() != L'\n') updated += L"\r\n";
     updated += kBegin; updated += L"\r\n";
@@ -320,25 +320,25 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
         updated += L"0.0.0.0 www." + domain + L"\r\n";
     }
     updated += kEnd; updated += L"\r\n";
-    if (!writeAtomically(path, updated)) return {false, 0, L"تعذر تحديث ملف hosts. لم يتم استبدال الملف الأصلي."};
+    if (!writeAtomically(path, updated)) return {false, 0, L"Could not update the hosts file. The original file was not replaced."};
     const bool dnsFlushed = flushDns();
-    return {true, domains.size(), dnsFlushed ? L"تم تطبيق حظر النطاقات وتحديث ذاكرة DNS." : L"تمت كتابة قواعد الحظر، لكن تعذر تحديث ذاكرة DNS تلقائيًا. أعد تشغيل المتصفح أو نفّذ ipconfig /flushdns."};
+    return {true, domains.size(), dnsFlushed ? L"Domain blocking was applied and the DNS cache was flushed." : L"Blocking rules were written, but the DNS cache could not be flushed automatically. Restart your browser or run ipconfig /flushdns."};
 }
 
 WebsiteBlockResult WebsiteBlocker::restore() {
-    if (!isAdministrator()) return {false, 0, L"يلزم تشغيل إجراء الاستعادة بصلاحيات المسؤول."};
+    if (!isAdministrator()) return {false, 0, L"Administrator privileges are required to restore website settings."};
     const auto path = hostsPath();
     std::wstring current;
-    if (path.empty() || !readFile(path, current)) return {false, 0, L"تعذر قراءة ملف hosts في Windows."};
+    if (path.empty() || !readFile(path, current)) return {false, 0, L"Could not read the Windows hosts file."};
     std::wstring updated;
     bool foundBlock = false;
     if (!removeManagedBlock(current, updated, foundBlock))
-        return {false, 0, L"علامات Himaya داخل ملف hosts غير مكتملة أو مكررة. لم يتم تعديل الملف."};
-    if (!foundBlock) return {true, 0, L"لا توجد قواعد Himaya مضافة إلى ملف hosts."};
-    if (!writeAtomically(path, updated)) return {false, 0, L"تعذرت استعادة ملف hosts. لم يتم استبدال الملف الأصلي."};
+        return {false, 0, L"Himaya markers in the hosts file are incomplete or duplicated. The file was not modified."};
+    if (!foundBlock) return {true, 0, L"There are no Himaya rules in the hosts file."};
+    if (!writeAtomically(path, updated)) return {false, 0, L"Could not restore the hosts file. The original file was not replaced."};
     DeleteFileW((path + L".himaya-original.bak").c_str());
     const bool dnsFlushed = flushDns();
-    return {true, 0, dnsFlushed ? L"تمت إزالة قواعد Himaya فقط، مع الحفاظ على بقية محتويات hosts." : L"أزيلت قواعد Himaya، لكن تعذر تحديث ذاكرة DNS تلقائيًا."};
+    return {true, 0, dnsFlushed ? L"Himaya rules were removed. All other hosts file entries were preserved." : L"Himaya rules were removed, but the DNS cache could not be flushed automatically."};
 }
 
 } // namespace himaya
