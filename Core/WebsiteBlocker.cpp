@@ -20,7 +20,7 @@
 namespace himaya {
 namespace {
 constexpr wchar_t kBegin[] = L"# BEGIN HIMAYA MANAGED BLOCK";
-constexpr wchar_t kLegacyBegin[] = L"هلو محمد";
+constexpr wchar_t kLegacyBegin[] = L"\x0647\x0644\x0648 \x0645\x062D\x0645\x062F";
 constexpr wchar_t kEnd[] = L"# END HIMAYA MANAGED BLOCK";
 constexpr wchar_t kAdultFeed[] = L"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts";
 constexpr wchar_t kAdultFeedCdn[] = L"https://cdn.jsdelivr.net/gh/StevenBlack/hosts@master/alternates/porn/hosts";
