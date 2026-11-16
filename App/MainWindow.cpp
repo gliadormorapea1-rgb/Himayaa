@@ -190,6 +190,8 @@ void MainWindow::layoutControls() {
 
 void MainWindow::setPage(int page) {
     currentPage_=std::clamp(page,0,6);
+    if(profileLabel_) ShowWindow(profileLabel_,SW_HIDE);
+    if(profile_) ShowWindow(profile_,SW_HIDE);
     auto show=[&](const std::vector<HWND>& group,bool visible) {
         for(HWND control:group) ShowWindow(control,visible?SW_SHOW:SW_HIDE);
     };
@@ -340,9 +342,9 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         addGroup(managementControls_,applySites_); addGroup(managementControls_,restoreSites_);
         addGroup(managementControls_,restoreOriginalHosts_);
         addGroup(protectionControls_,protectionDescription_); addGroup(protectionControls_,enableAdultDns_);
-        addGroup(protectionControls_,disableAdultDns_); addGroup(protectionControls_,summary_);
+        addGroup(protectionControls_,disableAdultDns_);
         addGroup(statisticsControls_,statsSummary_);
-        addGroup(settingsControls_,settingsDescription_); addGroup(settingsControls_,themeToggle_);
+        addGroup(settingsControls_,settingsDescription_); addGroup(settingsControls_,themeToggle_); addGroup(settingsControls_,summary_);
 
         EnumChildWindows(hwnd_,[](HWND child,LPARAM font)->BOOL { setFont(child,reinterpret_cast<HFONT>(font)); SetWindowTheme(child,L"Explorer",nullptr); return TRUE; },reinterpret_cast<LPARAM>(uiFont()));
         setFont(pageTitle_,headingFont()); setFont(dashboardApps_,cardFont()); setFont(dashboardWebsites_,cardFont());
