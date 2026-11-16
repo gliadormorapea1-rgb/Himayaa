@@ -7,9 +7,9 @@
 namespace himaya {
 namespace {
 std::wstring quote(const std::wstring& value) {
-    std::wstring out=L"\\\"";
+    std::wstring out(1,L'"');
     out+=value;
-    out+=L"\\\"";
+    out.push_back(L'"');
     return out;
 }
 bool writeUtf16(const std::wstring& path,const std::wstring& value) {
