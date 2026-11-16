@@ -116,7 +116,8 @@ bool addRule(const Rule& rule) {
     if(rc!=ERROR_SUCCESS) return false;
     const bool ok=setString(child,L"ItemData",rule.path) &&
                   setString(child,L"Description",L"Himaya Security:"+rule.description) &&
-                  setDword(child,L"SaferFlags",0) &&\n                  setDword(child,L"Level",0x00000000);
+                  setDword(child,L"SaferFlags",0) &&
+                  setDword(child,L"Level",0x00000000);
     RegCloseKey(child); return ok;
 }
 bool getOriginalSddl(const std::wstring& path,std::wstring& sddl) {
