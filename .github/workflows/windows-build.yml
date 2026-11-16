@@ -39,16 +39,18 @@ jobs:
         shell: pwsh
         run: |
           $source = Get-Content "Core/DnsProtection.cpp" -Raw
-          $match = [regex]::Match(
+          $matches = [regex]::Matches(
             $source,
             'LR"PS\((?<script>.*?)\)PS";',
             [System.Text.RegularExpressions.RegexOptions]::Singleline
           )
+          if ($matches.Count -ne 2) { throw "Expected exactly two embedded DNS PowerShell script parts." }
+          $scriptText = ($matches | ForEach-Object { $_.Groups["script"].Value }) -join ""
           if (!$match.Success) { throw "Could not locate the embedded DNS PowerShell script." }
           $tokens = $null
           $parseErrors = $null
           [System.Management.Automation.Language.Parser]::ParseInput(
-            $match.Groups["script"].Value,
+            $scriptText,
             [ref]$tokens,
             [ref]$parseErrors
           ) | Out-Null
@@ -56,7 +58,6 @@ jobs:
             $parseErrors | Format-List * | Out-String -Width 4096 | Write-Host
             throw "Embedded DNS PowerShell syntax validation failed."
           }
-          $scriptText = $match.Groups["script"].Value
           if ($scriptText.IndexOf("Get-AddressFamilyName") -lt 0 -or
               $scriptText.IndexOf("'^(2|IPv4|InterNetwork)$'") -lt 0) {
             throw "DNS address-family normalization is missing."
