@@ -1,5 +1,6 @@
 #include "../Core/ConfigStore.h"
 #include "../Core/ExecutionPolicy.h"
+#include "../Core/DnsProtection.h"
 #include <windows.h>
 #include <string>
 
@@ -38,7 +39,11 @@ void WINAPI serviceMain(DWORD,LPWSTR*) {
     for(;;){
         const auto result=himaya::ExecutionPolicy::synchronize(store);
         if(!result.success) store.logEvent(L"execution_policy_error",result.message);
-        const DWORD wait=WaitForSingleObject(g_stopEvent,10000);
+        if(store.getSetting(L"adult_dns_enabled",L"0")==L"1") {
+            const auto dns=himaya::DnsProtection::synchronize();
+            if(!dns.success) store.logEvent(L"adult_dns_sync_error",dns.message);
+        }
+        const DWORD wait=WaitForSingleObject(g_stopEvent,30000);
         if(wait==WAIT_OBJECT_0) break;
         if(wait==WAIT_FAILED) break;
     }
