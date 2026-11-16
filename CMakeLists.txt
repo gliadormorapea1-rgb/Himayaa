@@ -31,6 +31,7 @@ endif()
 add_library(HimayaCore STATIC
   Core/ConfigStore.cpp
   Core/WebsiteBlocker.cpp
+  Core/DnsProtection.cpp
   Core/ExecutionPolicy.cpp
   Core/AppLockerPolicy.cpp
   "${SQLITE_SOURCE_DIR}/sqlite3.c")
