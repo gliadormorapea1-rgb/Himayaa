@@ -365,8 +365,8 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
     }
     // Add IPv6 sink entries for the explicitly requested domain too, so an AAAA
     // lookup cannot bypass the IPv4 hosts-file block.
-    updated += L":: " + std::wstring(L"xnxx-arabic.com") + L"\r\n";
-    updated += L":: " + std::wstring(L"www.xnxx-arabic.com") + L"\r\n";
+    updated += L":: xnxx-arabic.com\r\n";
+    updated += L":: www.xnxx-arabic.com\r\n";
     updated += kEnd; updated += L"\r\n";
     if (!writeAtomically(path, updated)) return {false, 0, L"Could not update the hosts file. The original file was not replaced."};
     const bool dnsFlushed = flushDns();
