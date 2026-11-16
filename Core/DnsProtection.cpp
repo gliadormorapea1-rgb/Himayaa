@@ -29,12 +29,19 @@ function Backup-Settings {
     if($known.ContainsKey($key)){continue}
     $ip=Get-NetIPInterface -InterfaceIndex $a.InterfaceIndex -AddressFamily $a.AddressFamily -ErrorAction SilentlyContinue
     if($null -eq $ip){continue}
-    $dns += [pscustomobject]@{InterfaceIndex=[int]$a.InterfaceIndex;AddressFamily=[string]$a.AddressFamily;Dhcp=([string]$ip.Dhcp -eq 'Enabled');Servers=@($a.ServerAddresses)}
+    $nic=Get-NetAdapter -InterfaceIndex $a.InterfaceIndex -ErrorAction SilentlyContinue
+    $manualDns=$false
+    if($null -ne $nic){
+      $base=if([string]$a.AddressFamily -eq 'IPv4'){'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\'+$nic.InterfaceGuid.ToString('B')}else{'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\Interfaces\'+$nic.InterfaceGuid.ToString('B')}
+      $value=Get-ItemProperty -Path $base -Name NameServer -ErrorAction SilentlyContinue
+      $manualDns=($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value.NameServer))
+    }
+    $dns += [pscustomobject]@{InterfaceIndex=[int]$a.InterfaceIndex;AddressFamily=[string]$a.AddressFamily;Dhcp=(([string]$ip.Dhcp -eq 'Enabled') -and -not $manualDns);Servers=@($a.ServerAddresses)}
     $known[$key]=$true
   }
   $b.Dns=@($dns)
   if(-not $b.PolicyBackupComplete){
-    $items=@();$keys=@('HKLM\SOFTWARE\Policies\Microsoft\Edge','HKLM\SOFTWARE\Policies\Google\Chrome','HKLM\SOFTWARE\Policies\Mozilla\Firefox')
+    $items=@();$keys=@('HKLM\SOFTWARE\Policies\Microsoft\Edge','HKLM\SOFTWARE\Policies\Google\Chrome','HKLM\SOFTWARE\Policies\Mozilla\Firefox','HKLM\SOFTWARE\Policies\BraveSoftware\Brave')
     for($i=0;$i -lt $keys.Count;$i++){
       $file="policy-$i.reg";$full=Join-Path $root $file
       & reg.exe query $keys[$i] *> $null
@@ -63,6 +70,8 @@ function Apply-Protection {
   New-Item $edge -Force|Out-Null;New-Item $chrome -Force|Out-Null
   New-ItemProperty $edge -Name DnsOverHttpsMode -PropertyType String -Value off -Force|Out-Null
   New-ItemProperty $chrome -Name DnsOverHttpsMode -PropertyType String -Value off -Force|Out-Null
+  $brave='HKLM:\SOFTWARE\Policies\BraveSoftware\Brave';New-Item $brave -Force|Out-Null
+  New-ItemProperty $brave -Name DnsOverHttpsMode -PropertyType String -Value off -Force|Out-Null
   $ff='HKLM:\SOFTWARE\Policies\Mozilla\Firefox\DNSOverHTTPS';New-Item $ff -Force|Out-Null
   New-ItemProperty $ff -Name Enabled -PropertyType DWord -Value 0 -Force|Out-Null
   New-ItemProperty $ff -Name Locked -PropertyType DWord -Value 1 -Force|Out-Null
@@ -84,6 +93,7 @@ function Restore-Protection {
     }
     Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name DnsOverHttpsMode -ErrorAction SilentlyContinue
     Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Google\Chrome' -Name DnsOverHttpsMode -ErrorAction SilentlyContinue
+    Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\BraveSoftware\Brave' -Name DnsOverHttpsMode -ErrorAction SilentlyContinue
     Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox\DNSOverHTTPS' -Name Enabled,Locked -ErrorAction SilentlyContinue
     foreach($p in @($b.PolicyBackups)){$full=Join-Path $root $p.File;if(Test-Path $full){& reg.exe import $full *> $null}}
     Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
