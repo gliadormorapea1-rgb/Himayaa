@@ -243,6 +243,30 @@ try {
     }
     $doc.Save($PolicyFile)
     Set-AppLockerPolicy -XmlPolicy $PolicyFile -ErrorAction Stop
+    $converter = Get-ScheduledTask -TaskPath '\Microsoft\Windows\AppID\' -TaskName 'PolicyConverter' -ErrorAction SilentlyContinue
+    if ($null -ne $converter) {
+        if ($converter.State -ne 'Running') {
+            try { Start-ScheduledTask -InputObject $converter -ErrorAction Stop }
+            catch {
+                $currentTask = Get-ScheduledTask -TaskPath '\Microsoft\Windows\AppID\' -TaskName 'PolicyConverter' -ErrorAction SilentlyContinue
+                if ($null -eq $currentTask -or $currentTask.State -ne 'Running') { throw }
+            }
+        }
+        $deadline = (Get-Date).AddSeconds(20)
+        do {
+            Start-Sleep -Milliseconds 250
+            $currentTask = Get-ScheduledTask -TaskPath '\Microsoft\Windows\AppID\' -TaskName 'PolicyConverter' -ErrorAction SilentlyContinue
+        } while ($null -ne $currentTask -and $currentTask.State -eq 'Running' -and (Get-Date) -lt $deadline)
+        if ($null -ne $currentTask -and $currentTask.State -eq 'Running') { throw 'The AppLocker policy converter task did not finish in time.' }
+    }
+    if (-not $RestoreOnly) {
+        $effectivePolicy = Get-AppLockerPolicy -Effective -ErrorAction Stop
+        foreach ($item in $requested) {
+            if ($item[1].EndsWith('\*')) { continue }
+            $decision = @(Test-AppLockerPolicy -PolicyObject $effectivePolicy -Path $item[1] -User $item[0] -Filter Denied -ErrorAction Stop)
+            if ($decision.Count -eq 0) { throw ('The effective AppLocker policy does not deny the requested executable: '+$item[1]) }
+        }
+    }
     exit 0
 } catch {
     ($_ | Out-String) | Set-Content -LiteralPath $ErrorFile -Encoding UTF8
