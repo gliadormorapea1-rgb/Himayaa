@@ -18,6 +18,7 @@ private:
     void removeEntry();
     void saveProfile();
     void applyWebsites();
+    void setAdultDnsProtection(bool enabled);
     void restoreWebsites();
     void restoreOriginalHosts();
     void exportReport();
@@ -29,7 +30,7 @@ private:
     HINSTANCE instance_{};
     HWND hwnd_{};
     HWND category_{}, profile_{}, duration_{}, list_{}, input_{}, browse_{}, status_{};
-    HWND settings_{}, summary_{}, applySites_{}, restoreSites_{}, restoreOriginalHosts_{};
+    HWND settings_{}, summary_{}, applySites_{}, restoreSites_{}, restoreOriginalHosts_{}, enableAdultDns_{}, disableAdultDns_{};
     std::vector<himaya::Entry> visibleEntries_;
     himaya::ConfigStore store_;
 };
