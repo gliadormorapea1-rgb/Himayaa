@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "Core/WebsiteBlocker.h"
+#include "Core/DnsProtection.h"
 #include <commctrl.h>
 #include <shellapi.h>
 #include <string>
@@ -42,6 +43,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand) {
         const std::wstring command = argv[1];
         LocalFree(argv);
         if (command == L"--apply-sites" || command == L"--restore-sites") return runWebsiteMaintenance(command);
+        if (command == L"--restore-dns") {
+            const auto result = himaya::DnsProtection::restore();
+            MessageBoxW(nullptr,result.message.c_str(),L"Himaya Security",MB_OK|(result.success?MB_ICONINFORMATION:MB_ICONERROR));
+            return result.success?0:1;
+        }
     } else if (argv) {
         LocalFree(argv);
     }
