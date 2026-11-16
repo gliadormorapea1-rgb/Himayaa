@@ -939,7 +939,7 @@ void MainWindow::restoreWebsites() {
         L"Confirm website settings restoration", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
     if (answer != IDYES) return;
     const auto removed=himaya::WebsiteBlocker::restore();
-    WebsiteBlockResult result=removed;
+    himaya::WebsiteBlockResult result=removed;
     const auto socialEntries=store_.load(L"social_sites");
     if(removed.success && !socialEntries.empty()) {
         std::vector<std::wstring> socialDomains;
