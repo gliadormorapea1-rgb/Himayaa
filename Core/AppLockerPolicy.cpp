@@ -235,6 +235,44 @@ try {
         [xml]$doc = [string]$current
     }
     $root = $doc.DocumentElement
+    # EXE enforcement also disables packaged apps unless an Appx rule collection
+    # exists. Keep an explicit allow-signed-packages baseline when no Appx rules
+    # are configured, while preserving any collection owned by another policy.
+    $addedPackagedBaseline = $false
+    $appx = $root.SelectSingleNode("RuleCollection[@Type='Appx']")
+    $hasAppxRules = $false
+    if ($null -ne $appx) {
+        $hasAppxRules = @($appx.ChildNodes | Where-Object {
+            $_.NodeType -eq [System.Xml.XmlNodeType]::Element
+        }).Count -gt 0
+    }
+    if (-not $RestoreOnly -and -not $hasAppxRules) {
+        if ($null -eq $appx) {
+            $appx = $doc.CreateElement('RuleCollection')
+            $appx.SetAttribute('Type','Appx')
+            [void]$root.AppendChild($appx)
+        }
+        $appx.SetAttribute('EnforcementMode','Enabled')
+        $packagedAllow = $doc.CreateElement('FilePublisherRule')
+        $packagedAllow.SetAttribute('Id',([guid]::NewGuid()).ToString('D'))
+        $packagedAllow.SetAttribute('Name','Himaya packaged apps baseline allow')
+        $packagedAllow.SetAttribute('Description','Himaya Security: packaged apps baseline allow')
+        $packagedAllow.SetAttribute('UserOrGroupSid','S-1-1-0')
+        $packagedAllow.SetAttribute('Action','Allow')
+        $packagedConditions = $doc.CreateElement('Conditions')
+        $publisherCondition = $doc.CreateElement('FilePublisherCondition')
+        $publisherCondition.SetAttribute('PublisherName','*')
+        $publisherCondition.SetAttribute('ProductName','*')
+        $publisherCondition.SetAttribute('BinaryName','*')
+        $versionRange = $doc.CreateElement('BinaryVersionRange')
+        $versionRange.SetAttribute('LowSection','0.0.0.0')
+        $versionRange.SetAttribute('HighSection','*')
+        [void]$publisherCondition.AppendChild($versionRange)
+        [void]$packagedConditions.AppendChild($publisherCondition)
+        [void]$packagedAllow.AppendChild($packagedConditions)
+        [void]$appx.AppendChild($packagedAllow)
+        $addedPackagedBaseline = $true
+    }
     $exe = $root.SelectSingleNode("RuleCollection[@Type='Exe']")
     if ($null -eq $exe -and -not $RestoreOnly) {
         $exe = $doc.CreateElement('RuleCollection')
@@ -355,6 +393,19 @@ LR"PS(                StartTime=$converterStartTime
     if (-not $RestoreOnly) {
         $effectiveXmlText = Get-AppLockerPolicy -Effective -Xml -ErrorAction Stop
         [xml]$effectiveXmlDoc = [string]$effectiveXmlText
+        if ($addedPackagedBaseline) {
+            $effectiveAppxNode = $effectiveXmlDoc.DocumentElement.SelectSingleNode("RuleCollection[@Type='Appx']")
+            $effectivePackagedBaseline = @()
+            if ($null -ne $effectiveAppxNode) {
+                $effectivePackagedBaseline = @($effectiveAppxNode.ChildNodes | Where-Object {
+                    $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and
+                    $_.GetAttribute('Description') -eq 'Himaya Security: packaged apps baseline allow'
+                })
+            }
+            if ($effectivePackagedBaseline.Count -eq 0) {
+                throw 'The effective AppLocker policy does not contain the required packaged-app allow rule.'
+            }
+        }
         $effectiveExeNode = $effectiveXmlDoc.DocumentElement.SelectSingleNode("RuleCollection[@Type='Exe']")
         if ($null -eq $effectiveExeNode) {
             if ($requested.Count -gt 0) {
