@@ -114,6 +114,17 @@ bool ConfigStore::initialize() {
         "profile_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, description TEXT NOT NULL);"
     )) return false;
 
+    // Strict entries cannot be deleted or replaced while their lock is active.
+    // A NULL expiry represents the deliberate long-term lock.
+    if (!execute(
+        "CREATE TRIGGER IF NOT EXISTS himaya_strict_no_delete BEFORE DELETE ON entries "
+        "WHEN OLD.profile='severe' AND (OLD.expires_at IS NULL OR OLD.expires_at > unixepoch()) "
+        "BEGIN SELECT RAISE(ABORT,'Strict-mode lock is active and cannot be removed before expiry.'); END;"
+        "CREATE TRIGGER IF NOT EXISTS himaya_strict_no_update BEFORE UPDATE ON entries "
+        "WHEN OLD.profile='severe' AND (OLD.expires_at IS NULL OR OLD.expires_at > unixepoch()) "
+        "BEGIN SELECT RAISE(ABORT,'Strict-mode lock is active and cannot be changed before expiry.'); END;"
+    )) return false;
+
     // Adult-domain filtering is enabled by default. Trusted-person approval and timed unlock are intentionally out of scope.
     setSetting(L"adult_block_mode", L"all");
     execute("DELETE FROM settings WHERE key IN ('unlock_mode','password_admin');");
@@ -146,9 +157,9 @@ bool ConfigStore::addEntry(const std::wstring& category, const std::wstring& val
     if (!db_ || value.empty()) return false;
     sqlite3_stmt* statement = nullptr;
     const char* sql = "INSERT INTO entries(category,value,lock_mode,profile,expires_at) VALUES(?1,?2,?3,?4,"
-                      "CASE ?3 WHEN '1h' THEN unixepoch()+3600 WHEN '24h' THEN unixepoch()+86400 "
-                      "WHEN '7d' THEN unixepoch()+604800 WHEN '30d' THEN unixepoch()+2592000 "
-                      "WHEN '90d' THEN unixepoch()+7776000 ELSE NULL END) "
+                      "CASE ?3 WHEN '2m' THEN unixepoch()+120 WHEN '1h' THEN unixepoch()+3600 "
+                      "WHEN '24h' THEN unixepoch()+86400 WHEN '7d' THEN unixepoch()+604800 "
+                      "WHEN '30d' THEN unixepoch()+2592000 WHEN '90d' THEN unixepoch()+7776000 ELSE NULL END) "
                       "ON CONFLICT(category,value) DO UPDATE SET lock_mode=excluded.lock_mode,profile=excluded.profile,expires_at=excluded.expires_at";
     if (sqlite3_prepare_v2(db_, sql, -1, &statement, nullptr) != SQLITE_OK) { setError(sqlite3_errmsg(db_)); return false; }
     bindText(statement, 1, category); bindText(statement, 2, value);
@@ -156,6 +167,10 @@ bool ConfigStore::addEntry(const std::wstring& category, const std::wstring& val
     const bool ok = sqlite3_step(statement) == SQLITE_DONE;
     if (!ok) setError(sqlite3_errmsg(db_));
     sqlite3_finalize(statement);
+    if (ok && sqlite3_changes(db_) == 0) {
+        lastError_ = L"This strict-mode item is already locked and cannot be changed before its timer expires.";
+        return false;
+    }
     if (ok) logEvent(L"entry_added", value);
     return ok;
 }
