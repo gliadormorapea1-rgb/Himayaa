@@ -283,6 +283,140 @@ bool removeManagedBlock(const std::wstring& source, std::wstring& cleaned, bool&
     return true;
 }
 
+constexpr wchar_t kWebsitePolicyBackupRoot[] = L"SOFTWARE\\Himaya\\Security\\WebsitePolicyEntries";
+
+bool readRegistryString(HKEY key, const wchar_t* name, std::wstring& value) {
+    DWORD type=0, bytes=0;
+    if(RegQueryValueExW(key,name,nullptr,&type,nullptr,&bytes)!=ERROR_SUCCESS ||
+       type!=REG_SZ || bytes<sizeof(wchar_t) || bytes>65536) return false;
+    std::vector<wchar_t> buffer(bytes/sizeof(wchar_t)+1,L'\0');
+    if(RegQueryValueExW(key,name,nullptr,&type,reinterpret_cast<BYTE*>(buffer.data()),&bytes)!=ERROR_SUCCESS) return false;
+    value.assign(buffer.data());
+    return true;
+}
+
+bool writeRegistryString(HKEY key, const wchar_t* name, const std::wstring& value) {
+    return RegSetValueExW(key,name,0,REG_SZ,reinterpret_cast<const BYTE*>(value.c_str()),
+        static_cast<DWORD>((value.size()+1)*sizeof(wchar_t)))==ERROR_SUCCESS;
+}
+
+bool removeTrackedBrowserPolicies(const std::set<std::wstring>& keepPatterns) {
+    HKEY root=nullptr;
+    const LONG opened=RegOpenKeyExW(HKEY_LOCAL_MACHINE,kWebsitePolicyBackupRoot,0,
+        KEY_ENUMERATE_SUB_KEYS|KEY_READ|KEY_WRITE|KEY_WOW64_64KEY,&root);
+    if(opened==ERROR_FILE_NOT_FOUND) return true;
+    if(opened!=ERROR_SUCCESS) return false;
+    for(DWORD index=0;;) {
+        wchar_t childName[64]{}; DWORD nameLength=static_cast<DWORD>(std::size(childName));
+        const LONG enumerated=RegEnumKeyExW(root,index,childName,&nameLength,nullptr,nullptr,nullptr,nullptr);
+        if(enumerated==ERROR_NO_MORE_ITEMS) break;
+        if(enumerated!=ERROR_SUCCESS){RegCloseKey(root);return false;}
+        HKEY child=nullptr;
+        if(RegOpenKeyExW(root,childName,0,KEY_READ|KEY_WOW64_64KEY,&child)!=ERROR_SUCCESS){RegCloseKey(root);return false;}
+        std::wstring path,name,value;
+        const bool metadataOk=readRegistryString(child,L"Path",path) &&
+            readRegistryString(child,L"Name",name) && readRegistryString(child,L"Value",value);
+        RegCloseKey(child);
+        if(!metadataOk){RegCloseKey(root);return false;}
+        if(keepPatterns.find(value)!=keepPatterns.end()){++index;continue;}
+        HKEY policy=nullptr;
+        const LONG policyOpen=RegOpenKeyExW(HKEY_LOCAL_MACHINE,path.c_str(),0,
+            KEY_QUERY_VALUE|KEY_SET_VALUE|KEY_WOW64_64KEY,&policy);
+        if(policyOpen==ERROR_SUCCESS) {
+            std::wstring current;
+            if(readRegistryString(policy,name.c_str(),current) && current==value) {
+                const LONG deleted=RegDeleteValueW(policy,name.c_str());
+                if(deleted!=ERROR_SUCCESS && deleted!=ERROR_FILE_NOT_FOUND){RegCloseKey(policy);RegCloseKey(root);return false;}
+            }
+            RegCloseKey(policy);
+        } else if(policyOpen!=ERROR_FILE_NOT_FOUND && policyOpen!=ERROR_PATH_NOT_FOUND) {
+            RegCloseKey(root);return false;
+        }
+        if(RegDeleteTreeW(root,childName)!=ERROR_SUCCESS){RegCloseKey(root);return false;}
+    }
+    RegCloseKey(root);
+    return true;
+}
+
+bool addTrackedBrowserPolicy(const std::wstring& path,const std::wstring& pattern) {
+    HKEY policy=nullptr;
+    if(RegCreateKeyExW(HKEY_LOCAL_MACHINE,path.c_str(),0,nullptr,0,
+        KEY_QUERY_VALUE|KEY_SET_VALUE|KEY_WOW64_64KEY,nullptr,&policy,nullptr)!=ERROR_SUCCESS) return false;
+    std::wstring valueName;
+    for(DWORD slot=1;slot<=10000;++slot) {
+        valueName=std::to_wstring(slot);
+        std::wstring existing;
+        if(readRegistryString(policy,valueName.c_str(),existing)) {
+            if(existing==pattern){RegCloseKey(policy);return true;}
+            continue;
+        }
+        DWORD type=0,bytes=0;
+        const LONG query=RegQueryValueExW(policy,valueName.c_str(),nullptr,&type,nullptr,&bytes);
+        if(query!=ERROR_FILE_NOT_FOUND) continue;
+        if(!writeRegistryString(policy,valueName.c_str(),pattern)){RegCloseKey(policy);return false;}
+        RegCloseKey(policy);
+
+        HKEY root=nullptr;
+        if(RegCreateKeyExW(HKEY_LOCAL_MACHINE,kWebsitePolicyBackupRoot,0,nullptr,0,
+            KEY_CREATE_SUB_KEY|KEY_WOW64_64KEY,nullptr,&root,nullptr)!=ERROR_SUCCESS) {
+            HKEY rollback=nullptr;
+            if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,path.c_str(),0,KEY_SET_VALUE|KEY_WOW64_64KEY,&rollback)==ERROR_SUCCESS) {
+                RegDeleteValueW(rollback,valueName.c_str());RegCloseKey(rollback);
+            }
+            return false;
+        }
+        HKEY record=nullptr;
+        bool saved=false;
+        for(DWORD recordIndex=1;recordIndex<=100000;++recordIndex) {
+            const auto recordName=L"rule-"+std::to_wstring(recordIndex);
+            DWORD disposition=0;
+            const LONG created=RegCreateKeyExW(root,recordName.c_str(),0,nullptr,0,
+                KEY_SET_VALUE|KEY_WOW64_64KEY,nullptr,&record,&disposition);
+            if(created!=ERROR_SUCCESS) break;
+            if(disposition==REG_CREATED_NEW_KEY) {
+                saved=writeRegistryString(record,L"Path",path) &&
+                    writeRegistryString(record,L"Name",valueName) &&
+                    writeRegistryString(record,L"Value",pattern);
+                RegCloseKey(record);record=nullptr;
+                if(!saved) RegDeleteTreeW(root,recordName.c_str());
+                break;
+            }
+            RegCloseKey(record);record=nullptr;
+        }
+        RegCloseKey(root);
+        if(!saved) {
+            HKEY rollback=nullptr;
+            if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,path.c_str(),0,KEY_SET_VALUE|KEY_WOW64_64KEY,&rollback)==ERROR_SUCCESS) {
+                RegDeleteValueW(rollback,valueName.c_str());RegCloseKey(rollback);
+            }
+        }
+        return saved;
+    }
+    RegCloseKey(policy);
+    return false;
+}
+
+bool synchronizeBrowserPolicies(const std::set<std::wstring>& domains) {
+    const std::wstring paths[] = {
+        L"SOFTWARE\\Policies\\Microsoft\\Edge\\URLBlocklist",
+        L"SOFTWARE\\Policies\\Google\\Chrome\\URLBlocklist",
+        L"SOFTWARE\\Policies\\BraveSoftware\\Brave\\URLBlocklist",
+        L"SOFTWARE\\Policies\\Mozilla\\Firefox\\WebsiteFilter\\Block"
+    };
+    std::set<std::wstring> patterns;
+    for(const auto& domain:domains) {
+        patterns.insert(L"*://" + domain + L"/*");
+        patterns.insert(L"*://*." + domain + L"/*");
+    }
+    if(!removeTrackedBrowserPolicies(patterns)) return false;
+    for(const auto& path:paths) {
+        for(const auto& pattern:patterns) {
+            if(!addTrackedBrowserPolicy(path,pattern)) return false;
+        }
+    }
+    return true;
+}
+
 bool flushDns() {
     wchar_t system[MAX_PATH]{};
     const UINT length = GetSystemDirectoryW(system, MAX_PATH);
@@ -355,6 +489,8 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
     }
     updated += kEnd; updated += L"\r\n";
     if (!writeAtomically(path, updated)) return {false, 0, L"Could not update the hosts file. The original file was not replaced."};
+    if (!synchronizeBrowserPolicies(domains))
+        return {false, domains.size(), L"Hosts blocking was written, but one or more browser URL-block policies could not be synchronized. HimayaGuard will retry."};
     const bool dnsFlushed = flushDns();
     std::wstring resultMessage = dnsFlushed
         ? L"Domain blocking was applied and the DNS cache was flushed."
@@ -392,8 +528,9 @@ WebsiteBlockResult WebsiteBlocker::restore() {
     bool foundBlock = false;
     if (!removeManagedBlock(current, updated, foundBlock))
         return {false, 0, L"Himaya markers in the hosts file are incomplete or duplicated. The file was not modified."};
-    if (!foundBlock) return {true, 0, L"There are no Himaya rules in the hosts file."};
-    if (!writeAtomically(path, updated)) return {false, 0, L"Could not restore the hosts file. The original file was not replaced."};
+    if (foundBlock && !writeAtomically(path, updated)) return {false, 0, L"Could not restore the hosts file. The original file was not replaced."};
+    if (!synchronizeBrowserPolicies({}))
+        return {false, 0, L"Hosts rules were removed, but some Himaya-managed browser URL-block policies could not be restored safely."};
     // Keep the original backup so the full-file restore action remains available.
     const bool dnsFlushed = flushDns();
     return {true, 0, dnsFlushed ? L"Himaya rules were removed. All other hosts file entries were preserved." : L"Himaya rules were removed, but the DNS cache could not be flushed automatically."};
