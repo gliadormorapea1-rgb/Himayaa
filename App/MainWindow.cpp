@@ -274,29 +274,27 @@ void MainWindow::removeEntry() {
 void MainWindow::applyWebsites() {
     if (selectedCategory() != L"websites") return;
     const int answer = MessageBoxW(hwnd_,
-        L"سيتم طلب صلاحيات مسؤول Windows لتحديث ملف hosts، وتطبيق قائمة نطاقات إباحية مجتمعية بالإضافة إلى المواقع التي أضفتها. قد لا تشمل القائمة كل موقع موجود. هل تريد المتابعة؟",
+        L"سيتم تحديث ملف hosts وتطبيق قائمة النطاقات الإباحية المجتمعية بالإضافة إلى المواقع التي أضفتها. قد لا تشمل القائمة كل موقع موجود، وقد تتجاوزها بعض وسائل DNS/VPN. هل تريد المتابعة؟",
         L"تأكيد تطبيق حظر المواقع", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
     if (answer != IDYES) return;
-    wchar_t executable[MAX_PATH]{};
-    if (!GetModuleFileNameW(nullptr, executable, MAX_PATH)) {
-        setStatus(L"تعذر تحديد مسار تشغيل Himaya."); return;
-    }
-    const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(hwnd_, L"runas", executable, L"--apply-sites", nullptr, SW_SHOWNORMAL));
-    if (result <= 32) setStatus(L"لم يتم تشغيل إجراء الحظر بصلاحيات المسؤول. لم تتغير إعدادات المواقع.");
-    else setStatus(L"تم طلب صلاحيات المسؤول. ستظهر نتيجة تطبيق الحظر في نافذة منفصلة.");
+    std::vector<std::wstring> domains;
+    for(const auto& entry:store_.load(L"websites")) domains.push_back(entry.value);
+    const auto result=himaya::WebsiteBlocker::apply(domains,store_.getSetting(L"adult_block_mode",L"all")==L"all");
+    if(result.success) store_.logEvent(L"websites_applied",std::to_wstring(result.blockedDomains));
+    std::wstring message=result.message;
+    if(result.success && result.blockedDomains) message+=L"\nعدد النطاقات: "+std::to_wstring(result.blockedDomains);
+    setStatus(message);
+    MessageBoxW(hwnd_,message.c_str(),L"Himaya Security",MB_OK|(result.success?MB_ICONINFORMATION:MB_ICONERROR));
 }
 
 void MainWindow::restoreWebsites() {
     if (selectedCategory() != L"websites") return;
     const int answer = MessageBoxW(hwnd_,
-        L"سيتم إزالة الجزء الذي أضافه Himaya فقط من ملف hosts، مع الحفاظ على بقية الأسطر. هل تريد المتابعة؟",
+        L"سيتم إزالة قواعد Himaya فقط من ملف hosts واستعادة محتوياته الأصلية التي لم يدِرها البرنامج. هل تريد المتابعة؟",
         L"تأكيد استعادة إعدادات المواقع", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
     if (answer != IDYES) return;
-    wchar_t executable[MAX_PATH]{};
-    if (!GetModuleFileNameW(nullptr, executable, MAX_PATH)) {
-        setStatus(L"تعذر تحديد مسار تشغيل Himaya."); return;
-    }
-    const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(hwnd_, L"runas", executable, L"--restore-sites", nullptr, SW_SHOWNORMAL));
-    if (result <= 32) setStatus(L"لم يتم تشغيل إجراء الاستعادة بصلاحيات المسؤول.");
-    else setStatus(L"تم طلب صلاحيات المسؤول لاستعادة إعدادات المواقع.");
+    const auto result=himaya::WebsiteBlocker::restore();
+    if(result.success) store_.logEvent(L"websites_restored",result.message);
+    setStatus(result.message);
+    MessageBoxW(hwnd_,result.message.c_str(),L"Himaya Security",MB_OK|(result.success?MB_ICONINFORMATION:MB_ICONERROR));
 }
