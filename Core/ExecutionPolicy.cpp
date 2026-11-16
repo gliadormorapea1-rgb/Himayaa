@@ -113,7 +113,7 @@ std::vector<std::wstring> targetUserSids() {
             WTSFreeMemory(sessions);
         }
     }
-    return {unique.begin(),unique.end()};
+    return std::vector<std::wstring>(unique.begin(),unique.end());
 }
 
 std::wstring fingerprint(const std::vector<Rule>& rules,const std::vector<std::wstring>& sids) {
