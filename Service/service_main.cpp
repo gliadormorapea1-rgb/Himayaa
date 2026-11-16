@@ -42,8 +42,9 @@ void WINAPI serviceMain(DWORD,LPWSTR*) {
         if(wait==WAIT_OBJECT_0) break;
         if(wait==WAIT_FAILED) break;
     }
-    store.logEvent(L"guard_service_stopped",L"Windows service stopped");
-    report(SERVICE_STOPPED);
+    const auto restored=himaya::ExecutionPolicy::restoreAll();
+    store.logEvent(L"guard_service_stopped",restored.message);
+    report(SERVICE_STOPPED,restored.success?NO_ERROR:ERROR_GEN_FAILURE);
     CloseHandle(g_stopEvent);g_stopEvent=nullptr;
 }
 }
