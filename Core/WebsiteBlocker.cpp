@@ -327,14 +327,13 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
             domains.insert(L"www." + domain);
         }
     }
+    // This explicitly requested site is always blocked, independently of the
+    // optional community adult-list setting or its network availability.
+    domains.insert(L"xnxx-arabic.com");
+    domains.insert(L"www.xnxx-arabic.com");
+
     std::wstring feedWarning;
     if (includeAdultFeed) {
-        // Always include these built-in adult domains, even when the online feed is unavailable.
-        domains.insert(L"xnxx-arabic.com");
-        domains.insert(L"www.xnxx-arabic.com");
-        domains.insert(L"ww.xnxx-arabic.com");
-        domains.insert(L"www.ww.xnxx-arabic.com");
-
         // The online feed is an additional source; its failure must not prevent
         // built-in domains and user-managed rules from being applied.
         if (!downloadAdultFeed(domains, feedWarning)) {
@@ -364,6 +363,10 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
         // Write each exact hostname once; www variants are added deliberately above where appropriate.
         updated += L"0.0.0.0 " + domain + L"\r\n";
     }
+    // Add IPv6 sink entries for the explicitly requested domain too, so an AAAA
+    // lookup cannot bypass the IPv4 hosts-file block.
+    updated += L":: " + std::wstring(L"xnxx-arabic.com") + L"\r\n";
+    updated += L":: " + std::wstring(L"www.xnxx-arabic.com") + L"\r\n";
     updated += kEnd; updated += L"\r\n";
     if (!writeAtomically(path, updated)) return {false, 0, L"Could not update the hosts file. The original file was not replaced."};
     const bool dnsFlushed = flushDns();
