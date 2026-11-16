@@ -18,7 +18,7 @@ bool hostsContains(const char* needle) {
     if(!GetFileSizeEx(file,&size) || size.QuadPart<0 || size.QuadPart>32*1024*1024) {
         CloseHandle(file); return false;
     }
-    std::string bytes(static_cast<size_t>(size.QuadPart),'\\0');
+    std::string bytes(static_cast<size_t>(size.QuadPart),'\0');
     DWORD read=0;
     const bool ok=ReadFile(file,bytes.data(),static_cast<DWORD>(bytes.size()),&read,nullptr) &&
                   read==bytes.size();
