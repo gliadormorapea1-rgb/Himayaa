@@ -52,6 +52,12 @@ jobs:
             Get-FileHash -Algorithm SHA256 $exe | Format-List
           }
 
+      - name: Test Windows execution policy apply and restore
+        shell: pwsh
+        run: |
+          & ".\\build\\bin\\HimayaPolicySmokeTest.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Windows SRP policy smoke test failed with exit code $LASTEXITCODE." }
+
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
 
