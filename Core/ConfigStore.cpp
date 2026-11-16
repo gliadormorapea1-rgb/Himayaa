@@ -114,10 +114,9 @@ bool ConfigStore::initialize() {
         "profile_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, description TEXT NOT NULL);"
     )) return false;
 
-    // Approved defaults: comprehensive adult-domain category, dual unlock, shared administration.
+    // Adult-domain filtering is enabled by default. Trusted-person approval and timed unlock are intentionally out of scope.
     setSetting(L"adult_block_mode", L"all");
-    setSetting(L"unlock_mode", L"both");
-    setSetting(L"password_admin", L"both");
+    execute("DELETE FROM settings WHERE key IN ('unlock_mode','password_admin');");
     if (getSetting(L"active_profile").empty()) setSetting(L"active_profile", L"simple");
     execute("INSERT OR IGNORE INTO profiles VALUES"
         "('simple','الإدمان البسيط','حدود وتنبيهات وجلسات تركيز'),"
