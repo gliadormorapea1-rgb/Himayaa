@@ -48,13 +48,93 @@ std::wstring readUtf8(const std::wstring& path) {
     MultiByteToWideChar(CP_UTF8,0,bytes.data(),static_cast<int>(bytes.size()),result.data(),count);
     return result;
 }
+constexpr wchar_t kAppIdBackupKey[]=L"SOFTWARE\\Himaya\\Security\\AppIDSvcBackup";
+bool readRegistryDword(HKEY key,const wchar_t* name,DWORD& value) {
+    DWORD type=0,bytes=sizeof(value);
+    return RegQueryValueExW(key,name,nullptr,&type,reinterpret_cast<BYTE*>(&value),&bytes)==ERROR_SUCCESS &&
+           type==REG_DWORD && bytes==sizeof(value);
+}
+bool saveAppIdConfiguration(SC_HANDLE service,const SERVICE_STATUS_PROCESS& status,std::wstring& error) {
+    HKEY key=nullptr;
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,kAppIdBackupKey,0,KEY_QUERY_VALUE|KEY_WOW64_64KEY,&key)==ERROR_SUCCESS) {
+        DWORD oldStart=0,wasRunning=0;
+        const bool valid=readRegistryDword(key,L"StartType",oldStart)&&readRegistryDword(key,L"WasRunning",wasRunning);
+        RegCloseKey(key);
+        if(valid) return true;
+        error=L"The saved Application Identity service configuration is incomplete; refusing to overwrite it.";
+        return false;
+    }
+    DWORD bytes=0;
+    QueryServiceConfigW(service,nullptr,0,&bytes);
+    if(!bytes){error=L"Could not read the original Application Identity startup configuration.";return false;}
+    std::vector<BYTE> buffer(bytes);
+    auto* config=reinterpret_cast<QUERY_SERVICE_CONFIGW*>(buffer.data());
+    if(!QueryServiceConfigW(service,config,bytes,&bytes)) {
+        error=L"Could not read the original Application Identity startup configuration.";
+        return false;
+    }
+    if(RegCreateKeyExW(HKEY_LOCAL_MACHINE,kAppIdBackupKey,0,nullptr,0,KEY_SET_VALUE|KEY_WOW64_64KEY,
+                       nullptr,&key,nullptr)!=ERROR_SUCCESS) {
+        error=L"Could not save the original Application Identity service configuration.";
+        return false;
+    }
+    const DWORD wasRunning=status.dwCurrentState==SERVICE_RUNNING?1u:0u;
+    const LONG first=RegSetValueExW(key,L"StartType",0,REG_DWORD,reinterpret_cast<const BYTE*>(&config->dwStartType),sizeof(DWORD));
+    const LONG second=RegSetValueExW(key,L"WasRunning",0,REG_DWORD,reinterpret_cast<const BYTE*>(&wasRunning),sizeof(DWORD));
+    RegCloseKey(key);
+    if(first!=ERROR_SUCCESS||second!=ERROR_SUCCESS) {
+        error=L"Could not save the original Application Identity service configuration.";
+        return false;
+    }
+    return true;
+}
+bool restoreAppIdConfiguration(std::wstring& error) {
+    HKEY key=nullptr;
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,kAppIdBackupKey,0,KEY_READ|KEY_WOW64_64KEY,&key)!=ERROR_SUCCESS) return true;
+    DWORD startType=SERVICE_DEMAND_START,wasRunning=0;
+    const bool valid=readRegistryDword(key,L"StartType",startType)&&readRegistryDword(key,L"WasRunning",wasRunning);
+    RegCloseKey(key);
+    if(!valid){error=L"The saved Application Identity service configuration is invalid.";return false;}
+    SC_HANDLE manager=OpenSCManagerW(nullptr,nullptr,SC_MANAGER_CONNECT);
+    if(!manager){error=L"Could not open the Service Control Manager to restore Application Identity.";return false;}
+    SC_HANDLE service=OpenServiceW(manager,L"AppIDSvc",SERVICE_QUERY_STATUS|SERVICE_CHANGE_CONFIG|SERVICE_STOP);
+    if(!service){error=L"Could not open AppIDSvc to restore its startup configuration.";CloseServiceHandle(manager);return false;}
+    SERVICE_STATUS_PROCESS status{};DWORD needed=0;
+    bool ok=QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,reinterpret_cast<BYTE*>(&status),sizeof(status),&needed)!=FALSE;
+    if(ok && wasRunning==0 && status.dwCurrentState!=SERVICE_STOPPED) {
+        SERVICE_STATUS stopped{};
+        if(!ControlService(service,SERVICE_CONTROL_STOP,&stopped) && GetLastError()!=ERROR_SERVICE_NOT_ACTIVE) ok=false;
+        for(int i=0;ok && i<30;++i) {
+            Sleep(250);
+            if(!QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,reinterpret_cast<BYTE*>(&status),sizeof(status),&needed)){ok=false;break;}
+            if(status.dwCurrentState==SERVICE_STOPPED) break;
+        }
+        if(ok && status.dwCurrentState!=SERVICE_STOPPED) ok=false;
+    }
+    if(ok && !ChangeServiceConfigW(service,SERVICE_NO_CHANGE,startType,SERVICE_NO_CHANGE,
+                                   nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr)) ok=false;
+    const DWORD winError=GetLastError();
+    CloseServiceHandle(service);CloseServiceHandle(manager);
+    if(!ok) {
+        error=L"Could not restore the original Application Identity service configuration. Windows error: "+std::to_wstring(winError);
+        return false;
+    }
+    RegDeleteTreeW(HKEY_LOCAL_MACHINE,kAppIdBackupKey);
+    return true;
+}
 bool ensureAppIdRunning(std::wstring& error) {
     SC_HANDLE manager=OpenSCManagerW(nullptr,nullptr,SC_MANAGER_CONNECT);
     if(!manager){error=L"Could not open the Windows Service Control Manager.";return false;}
-    SC_HANDLE service=OpenServiceW(manager,L"AppIDSvc",SERVICE_QUERY_STATUS|SERVICE_START);
+    SC_HANDLE service=OpenServiceW(manager,L"AppIDSvc",SERVICE_QUERY_STATUS|SERVICE_QUERY_CONFIG|SERVICE_CHANGE_CONFIG|SERVICE_START);
     if(!service){error=L"Application Identity (AppIDSvc) is unavailable. Windows error: "+std::to_wstring(GetLastError());CloseServiceHandle(manager);return false;}
     SERVICE_STATUS_PROCESS status{};DWORD needed=0;
     bool ok=QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,reinterpret_cast<BYTE*>(&status),sizeof(status),&needed)!=FALSE;
+    if(ok) ok=saveAppIdConfiguration(service,status,error);
+    if(ok && !ChangeServiceConfigW(service,SERVICE_NO_CHANGE,SERVICE_AUTO_START,SERVICE_NO_CHANGE,
+                                   nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr)) {
+        error=L"Could not configure Application Identity to start automatically. Windows error: "+std::to_wstring(GetLastError());
+        ok=false;
+    }
     if(ok && status.dwCurrentState!=SERVICE_RUNNING) {
         if(status.dwCurrentState==SERVICE_STOPPED) {
             if(!StartServiceW(service,0,nullptr) && GetLastError()!=ERROR_SERVICE_ALREADY_RUNNING) ok=false;
@@ -66,7 +146,7 @@ bool ensureAppIdRunning(std::wstring& error) {
         }
         if(ok && status.dwCurrentState!=SERVICE_RUNNING) ok=false;
     }
-    if(!ok) error=L"Could not start Application Identity (AppIDSvc). Windows error: "+std::to_wstring(GetLastError());
+    if(!ok && error.empty()) error=L"Could not start Application Identity (AppIDSvc). Windows error: "+std::to_wstring(GetLastError());
     CloseServiceHandle(service);CloseServiceHandle(manager);
     return ok;
 }
