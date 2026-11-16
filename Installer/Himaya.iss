@@ -70,6 +70,7 @@ begin
   if CurUninstallStep = usUninstall then
   begin
     Exec(ExpandConstant('{sys}\sc.exe'), 'stop HimayaGuard', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(10000);
     Exec(ExpandConstant('{sys}\sc.exe'), 'delete HimayaGuard', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;
