@@ -69,6 +69,48 @@ function Backup-Settings {
     }
   }
 
+  # The previous release wrote an empty DNS backup because it passed
+  # numeric AddressFamily values to Get-NetIPInterface. Repair that specific
+  # legacy shape only when current DNS/browser settings show protection was
+  # not already applied; otherwise preserve the backup and stop safely.
+  if ($null -eq $b.PSObject.Properties['BackupVersion'] -and @($b.Dns).Count -eq 0) {
+    $targetDnsFound = $false
+    foreach ($current in (Get-DnsClientServerAddress -ErrorAction Stop)) {
+      $currentFamily = Get-AddressFamilyName $current.AddressFamily
+      if ($null -eq $currentFamily) { continue }
+      $targetServers = if ($currentFamily -eq 'IPv4') { $dns4 } else { $dns6 }
+      if ((@($current.ServerAddresses) -join ',') -eq ($targetServers -join ',')) {
+        $targetDnsFound = $true
+        break
+      }
+    }
+    $policyProtectionFound = $false
+    foreach ($policyPath in @(
+      'HKLM:\SOFTWARE\Policies\Microsoft\Edge',
+      'HKLM:\SOFTWARE\Policies\Google\Chrome',
+      'HKLM:\SOFTWARE\Policies\BraveSoftware\Brave'
+    )) {
+      $policyValue = Get-ItemProperty -Path $policyPath -Name DnsOverHttpsMode -ErrorAction SilentlyContinue
+      if ($null -ne $policyValue -and [string]$policyValue.DnsOverHttpsMode -eq 'off') {
+        $policyProtectionFound = $true
+      }
+    }
+    $firefoxPolicy = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox\DNSOverHTTPS' -ErrorAction SilentlyContinue
+    if ($null -ne $firefoxPolicy -and
+        (($null -ne $firefoxPolicy.Enabled -and [int]$firefoxPolicy.Enabled -eq 0) -or
+         ($null -ne $firefoxPolicy.Locked -and [int]$firefoxPolicy.Locked -eq 1))) {
+      $policyProtectionFound = $true
+    }
+    if ($targetDnsFound -or $policyProtectionFound) {
+      throw 'The legacy backup contains no DNS entries, but Himaya protection may already be present. The backup was preserved; manual recovery review is required.'
+    }
+    Write-Log 'Repairing empty legacy backup: current DNS and browser policies do not show Himaya protection.'
+    $b.Dns = @()
+    $b.PolicyKeys = @()
+    $b.PolicyBackups = @()
+    $b.PolicyBackupComplete = $false
+  }
+
   $dns = @($b.Dns)
   $known = @{}
   foreach ($entry in $dns) {
