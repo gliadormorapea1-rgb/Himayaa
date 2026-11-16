@@ -52,7 +52,12 @@ bool launchProbe(const std::wstring& path,bool expectBlocked) {
         if(!started) {
             const DWORD error=GetLastError();
             if(expectBlocked && error==ERROR_ACCESS_DISABLED_BY_POLICY) return true;
-            if(!expectBlocked && error==ERROR_ACCESS_DISABLED_BY_POLICY) {Sleep(500);continue;}
+            if(!expectBlocked && error==ERROR_ACCESS_DISABLED_BY_POLICY) {
+                wprintf(L"Probe still blocked after policy removal (attempt %d), Windows error %lu.\\n",attempt+1,error);
+                Sleep(500);continue;
+            }
+            wprintf(L"Probe CreateProcessW failed (expectBlocked=%d), Windows error %lu.\\n",
+                    expectBlocked?1:0,error);
             return false;
         }
         if(expectBlocked) {
@@ -62,10 +67,15 @@ bool launchProbe(const std::wstring& path,bool expectBlocked) {
             Sleep(500);
             continue;
         }
-        WaitForSingleObject(process.hProcess,5000);
+        const DWORD waitResult=WaitForSingleObject(process.hProcess,5000);
         DWORD exitCode=0;GetExitCodeProcess(process.hProcess,&exitCode);
         CloseHandle(process.hThread);CloseHandle(process.hProcess);
-        return exitCode==42;
+        if(waitResult!=WAIT_OBJECT_0 || exitCode!=42) {
+            wprintf(L"Probe launched after policy removal but did not finish as expected (wait=%lu, exit=%lu).\\n",
+                    waitResult,exitCode);
+            return false;
+        }
+        return true;
     }
     return false;
 }
@@ -109,6 +119,7 @@ int wmain(int argc,wchar_t** argv) {
     }
     if(!store.removeEntry(L"applications",testPath)) {DeleteFileW(testPath.c_str());return 16;}
     auto removed=himaya::ExecutionPolicy::synchronize(store);
+    wprintf(L"AppLocker removal result: success=%d, message=%ls\\n",removed.success?1:0,removed.message.c_str());
     const bool allowedAgain=removed.success && launchProbe(testPath,false);
     DeleteFileW(testPath.c_str());
     if(!removed.success || !allowedAgain) return 17;
