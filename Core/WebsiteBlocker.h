@@ -22,6 +22,9 @@ public:
     // Removes only the managed Himaya block; all other hosts-file lines are preserved.
     static WebsiteBlockResult restore();
 
+    // Restores the complete hosts file from Himaya's first-use backup.
+    static WebsiteBlockResult restoreOriginal();
+
     static bool isAdministrator();
 };
 
