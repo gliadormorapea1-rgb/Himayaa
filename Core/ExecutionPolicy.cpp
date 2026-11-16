@@ -1,6 +1,8 @@
 #include "ExecutionPolicy.h"
 #include "ConfigStore.h"
+#include "AppLockerPolicy.h"
 #include <windows.h>
+#include <WtsApi32.h>
 #include <aclapi.h>
 #include <sddl.h>
 #include <algorithm>
@@ -10,6 +12,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <set>
 
 namespace himaya {
 namespace {
@@ -72,9 +75,51 @@ bool setString(HKEY key,const wchar_t* name,const std::wstring& value) {
 bool setDword(HKEY key,const wchar_t* name,DWORD value) {
     return RegSetValueExW(key,name,0,REG_DWORD,reinterpret_cast<const BYTE*>(&value),sizeof(value))==ERROR_SUCCESS;
 }
-std::wstring fingerprint(const std::vector<Rule>& rules) {
+
+std::vector<std::wstring> targetUserSids() {
+    std::set<std::wstring> unique;
+    HANDLE processToken=nullptr;
+    if(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&processToken)) {
+        DWORD bytes=0; GetTokenInformation(processToken,TokenUser,nullptr,0,&bytes);
+        std::vector<BYTE> buffer(bytes);
+        if(bytes && GetTokenInformation(processToken,TokenUser,buffer.data(),bytes,&bytes)) {
+            auto* user=reinterpret_cast<TOKEN_USER*>(buffer.data());
+            BYTE systemBuffer[SECURITY_MAX_SID_SIZE]{}; DWORD systemSize=sizeof(systemBuffer);
+            const bool isSystem=CreateWellKnownSid(WinLocalSystemSid,nullptr,systemBuffer,&systemSize) &&
+                                EqualSid(user->User.Sid,systemBuffer);
+            if(!isSystem) {
+                LPWSTR raw=nullptr;
+                if(ConvertSidToStringSidW(user->User.Sid,&raw) && raw) { unique.insert(raw);LocalFree(raw); }
+            }
+        }
+        CloseHandle(processToken);
+    }
+    if(unique.empty()) {
+        PWTS_SESSION_INFOW sessions=nullptr; DWORD count=0;
+        if(WTSEnumerateSessionsW(WTS_CURRENT_SERVER_HANDLE,0,1,&sessions,&count)) {
+            for(DWORD i=0;i<count;++i) {
+                if(sessions[i].State!=WTSActive) continue;
+                HANDLE token=nullptr;
+                if(!WTSQueryUserToken(sessions[i].SessionId,&token)) continue;
+                DWORD bytes=0;GetTokenInformation(token,TokenUser,nullptr,0,&bytes);
+                std::vector<BYTE> buffer(bytes);
+                if(bytes && GetTokenInformation(token,TokenUser,buffer.data(),bytes,&bytes)) {
+                    auto* user=reinterpret_cast<TOKEN_USER*>(buffer.data());
+                    LPWSTR raw=nullptr;
+                    if(ConvertSidToStringSidW(user->User.Sid,&raw) && raw) {unique.insert(raw);LocalFree(raw);}
+                }
+                CloseHandle(token);
+            }
+            WTSFreeMemory(sessions);
+        }
+    }
+    return {unique.begin(),unique.end()};
+}
+
+std::wstring fingerprint(const std::vector<Rule>& rules,const std::vector<std::wstring>& sids) {
     std::wstring s;
     for(const auto& r:rules){s+=r.path;s+=L'\n';s+=r.description;s+=L'\n';}
+    for(const auto& sid:sids){s+=sid;s+=L'\n';}
     return s;
 }
 bool configureSrp() {
@@ -256,25 +301,37 @@ PolicySyncResult ExecutionPolicy::synchronize(ConfigStore& store) {
     }
     std::sort(rules.begin(),rules.end(),[](const Rule&a,const Rule&b){return a.path<b.path;});
     rules.erase(std::unique(rules.begin(),rules.end(),[](const Rule&a,const Rule&b){return lower(a.path)==lower(b.path);}),rules.end());
+    const auto sids=targetUserSids();
     static std::wstring last;
-    const auto current=fingerprint(rules);
+    const auto current=fingerprint(rules,sids);
     if(current==last) {
         if(!synchronizeFolderAccess(folders)) return {false,0,L"Could not apply or restore folder access permissions."};
         return {true,rules.size(),L"Execution and access policies are up to date."};
     }
-    if(!configureSrp()) return {false,0,L"Could not initialize Windows Software Restriction Policies."};
-    if(!removeManagedRules()) return {false,0,L"Could not safely remove old Himaya rules."};
-    for(const auto& rule:rules) if(!addRule(rule)) return {false,0,L"Could not register one of the Windows execution-blocking rules."};
+    std::vector<AppLockerRule> appRules;
+    appRules.reserve(rules.size());
+    for(const auto& rule:rules) appRules.push_back({rule.path,rule.description});
+    std::wstring policyError;
+    if(!AppLockerPolicy::synchronize(appRules,sids,store.directory(),policyError)) {
+        return {false,0,L"Could not apply Windows AppLocker rules. "+policyError};
+    }
+    // Keep legacy SRP rules only until AppLocker has been successfully written.
+    if(!removeManagedRules()) return {false,0,L"AppLocker was updated, but legacy Himaya SRP rules could not be removed."};
     if(!synchronizeFolderAccess(folders)) return {false,0,L"Could not apply or restore folder access permissions."};
     last=current;
-    DWORD_PTR ignored=0;
-    SendMessageTimeoutW(HWND_BROADCAST,WM_SETTINGCHANGE,0,reinterpret_cast<LPARAM>(L"Software\\Policies\\Microsoft\\Windows\\Safer\\CodeIdentifiers"),SMTO_ABORTIFHUNG,2000,&ignored);
     store.logEvent(L"execution_policy_synced",std::to_wstring(rules.size()));
-    return {true,rules.size(),L"Execution-blocking rules and access restrictions for selected folders were updated."};
+    return {true,rules.size(),L"AppLocker execution rules and folder access restrictions were updated."};
 }
 PolicySyncResult ExecutionPolicy::restoreAll() {
-    if(!removeManagedRules()) return {false,0,L"Could not remove execution-blocking rules when the service stopped."};
+    std::wstring error;
+    if(!AppLockerPolicy::restore((std::filesystem::temp_directory_path()/L"Himaya").wstring(),error)) {
+        // Use the ProgramData directory used by ConfigStore for policy work files.
+        ConfigStore store;
+        if(!AppLockerPolicy::restore(store.directory(),error))
+            return {false,0,L"Could not remove Himaya AppLocker rules: "+error};
+    }
+    if(!removeManagedRules()) return {false,0,L"Could not remove legacy Himaya SRP rules."};
     if(!synchronizeFolderAccess({})) return {false,0,L"Could not restore permissions for some folders."};
-    return {true,0,L"Himaya rules were removed and folder permissions were restored."};
+    return {true,0,L"Himaya AppLocker and legacy SRP rules were removed; folder permissions were restored."};
 }
 }
