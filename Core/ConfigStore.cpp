@@ -128,12 +128,14 @@ bool ConfigStore::initialize() {
     // Adult-domain filtering is enabled by default. Trusted-person approval and timed unlock are intentionally out of scope.
     setSetting(L"adult_block_mode", L"all");
     execute("DELETE FROM settings WHERE key IN ('unlock_mode','password_admin');");
-    if (getSetting(L"active_profile").empty()) setSetting(L"active_profile", L"simple");
-    execute("INSERT OR IGNORE INTO profiles VALUES"
+    // Keep only the two supported profiles. Migrate legacy profile entries to Basic.
+    if (!execute("UPDATE entries SET profile='simple' WHERE profile NOT IN ('simple','severe');"
+                 "DELETE FROM profiles WHERE profile_id NOT IN ('simple','severe');")) return false;
+    const auto activeProfile = getSetting(L"active_profile", L"simple");
+    if (activeProfile != L"simple" && activeProfile != L"severe") setSetting(L"active_profile", L"simple");
+    if (!execute("INSERT OR IGNORE INTO profiles VALUES"
         "('simple','Basic','Limits, reminders, and focus sessions'),"
-        "('moderate','Moderate','Blocking schedules and delayed unlocking'),"
-        "('severe','Strict','Strict rules and administrative review'),"
-        "('recovery','Intensive recovery','Progress tracking, goals, and support');");
+        "('severe','Strict','Strict rules and administrative review');")) return false;
     return true;
 }
 
@@ -185,6 +187,18 @@ bool ConfigStore::removeEntry(const std::wstring& category, const std::wstring& 
     sqlite3_finalize(statement);
     if (ok) logEvent(L"entry_removed", value);
     return ok;
+}
+
+bool ConfigStore::hasPermanentStrictLock() const {
+    if (!db_) return false;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT 1 FROM entries WHERE profile='severe' "
+                      "AND category IN ('applications','websites') "
+                      "AND expires_at IS NULL LIMIT 1";
+    if (sqlite3_prepare_v2(db_, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
+    const bool found = sqlite3_step(statement) == SQLITE_ROW;
+    sqlite3_finalize(statement);
+    return found;
 }
 
 bool ConfigStore::setSetting(const std::wstring& key, const std::wstring& value) {
