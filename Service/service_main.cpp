@@ -45,8 +45,11 @@ void WINAPI serviceMain(DWORD,LPWSTR*) {
     bool websiteSyncInitialized=false;
     for(;;){
         const auto result=himaya::ExecutionPolicy::synchronize(store);
+        // Custom website rules and timed full-domain social locks share the
+        // same Himaya-managed Hosts block, but remain separate database categories.
         std::vector<std::wstring> websiteDomains;
         for(const auto& entry:store.load(L"websites")) websiteDomains.push_back(entry.value);
+        for(const auto& entry:store.load(L"social_sites")) websiteDomains.push_back(entry.value);
         std::wstring websiteSet;
         for(const auto& domain:websiteDomains) { websiteSet+=domain; websiteSet.push_back(L'\n'); }
         if(!websiteSyncInitialized || websiteSet!=lastWebsiteSet) {
