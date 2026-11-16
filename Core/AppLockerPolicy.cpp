@@ -150,6 +150,78 @@ bool ensureAppIdRunning(std::wstring& error) {
     CloseServiceHandle(service);CloseServiceHandle(manager);
     return ok;
 }
+constexpr wchar_t kAppLockerFltrBackupKey[]=L"SOFTWARE\\Himaya\\Security\\AppLockerFltrBackup";
+bool ensureAppLockerFltrRunning(std::wstring& error) {
+    SC_HANDLE manager=OpenSCManagerW(nullptr,nullptr,SC_MANAGER_CONNECT);
+    if(!manager){error=L"Could not open the Service Control Manager for AppLockerFltr.";return false;}
+    SC_HANDLE service=OpenServiceW(manager,L"AppLockerFltr",SERVICE_QUERY_STATUS|SERVICE_START);
+    if(!service){error=L"AppLockerFltr is unavailable. Windows error: "+std::to_wstring(GetLastError());CloseServiceHandle(manager);return false;}
+    SERVICE_STATUS_PROCESS status{};DWORD needed=0;
+    bool ok=QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,reinterpret_cast<BYTE*>(&status),sizeof(status),&needed)!=FALSE;
+    if(ok) {
+        HKEY key=nullptr;
+        if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,kAppLockerFltrBackupKey,0,KEY_QUERY_VALUE|KEY_WOW64_64KEY,&key)==ERROR_SUCCESS) {
+            DWORD saved=0;
+            if(!readRegistryDword(key,L"WasRunning",saved)) {ok=false;error=L"The saved AppLockerFltr service state is invalid.";}
+            RegCloseKey(key);
+        } else {
+            if(RegCreateKeyExW(HKEY_LOCAL_MACHINE,kAppLockerFltrBackupKey,0,nullptr,0,KEY_SET_VALUE|KEY_WOW64_64KEY,nullptr,&key,nullptr)!=ERROR_SUCCESS) {
+                ok=false;error=L"Could not save the original AppLockerFltr service state.";
+            } else {
+                const DWORD wasRunning=status.dwCurrentState==SERVICE_RUNNING?1u:0u;
+                if(RegSetValueExW(key,L"WasRunning",0,REG_DWORD,reinterpret_cast<const BYTE*>(&wasRunning),sizeof(wasRunning))!=ERROR_SUCCESS) {
+                    ok=false;error=L"Could not save the original AppLockerFltr service state.";
+                }
+                RegCloseKey(key);
+            }
+        }
+    }
+    if(ok && status.dwCurrentState!=SERVICE_RUNNING) {
+        if(status.dwCurrentState==SERVICE_STOPPED) {
+            if(!StartServiceW(service,0,nullptr) && GetLastError()!=ERROR_SERVICE_ALREADY_RUNNING) ok=false;
+        }
+        for(int i=0;ok && i<30;++i) {
+            Sleep(250);
+            if(!QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,reinterpret_cast<BYTE*>(&status),sizeof(status),&needed)){ok=false;break;}
+            if(status.dwCurrentState==SERVICE_RUNNING) break;
+        }
+        if(ok && status.dwCurrentState!=SERVICE_RUNNING) ok=false;
+    }
+    if(!ok && error.empty()) error=L"Could not start AppLockerFltr. Windows error: "+std::to_wstring(GetLastError());
+    CloseServiceHandle(service);CloseServiceHandle(manager);
+    return ok;
+}
+bool restoreAppLockerFltr(std::wstring& error) {
+    HKEY key=nullptr;
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,kAppLockerFltrBackupKey,0,KEY_READ|KEY_WOW64_64KEY,&key)!=ERROR_SUCCESS) return true;
+    DWORD wasRunning=0;
+    const bool valid=readRegistryDword(key,L"WasRunning",wasRunning);
+    RegCloseKey(key);
+    if(!valid){error=L"The saved AppLockerFltr service state is invalid.";return false;}
+    if(wasRunning==0) {
+        SC_HANDLE manager=OpenSCManagerW(nullptr,nullptr,SC_MANAGER_CONNECT);
+        if(!manager){error=L"Could not open the Service Control Manager to restore AppLockerFltr.";return false;}
+        SC_HANDLE service=OpenServiceW(manager,L"AppLockerFltr",SERVICE_QUERY_STATUS|SERVICE_STOP);
+        if(!service){error=L"Could not open AppLockerFltr to restore its original state.";CloseServiceHandle(manager);return false;}
+        SERVICE_STATUS_PROCESS status{};DWORD needed=0;
+        bool ok=QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,reinterpret_cast<BYTE*>(&status),sizeof(status),&needed)!=FALSE;
+        if(ok && status.dwCurrentState!=SERVICE_STOPPED) {
+            SERVICE_STATUS stopped{};
+            if(!ControlService(service,SERVICE_CONTROL_STOP,&stopped) && GetLastError()!=ERROR_SERVICE_NOT_ACTIVE) ok=false;
+            for(int i=0;ok && i<30;++i) {
+                Sleep(250);
+                if(!QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,reinterpret_cast<BYTE*>(&status),sizeof(status),&needed)){ok=false;break;}
+                if(status.dwCurrentState==SERVICE_STOPPED) break;
+            }
+            if(ok && status.dwCurrentState!=SERVICE_STOPPED) ok=false;
+        }
+        const DWORD winError=GetLastError();
+        CloseServiceHandle(service);CloseServiceHandle(manager);
+        if(!ok){error=L"Could not restore the original AppLockerFltr state. Windows error: "+std::to_wstring(winError);return false;}
+    }
+    RegDeleteTreeW(HKEY_LOCAL_MACHINE,kAppLockerFltrBackupKey);
+    return true;
+}
 const wchar_t* scriptText=LR"PS(
 param([string]$RulesFile,[string]$PolicyFile,[string]$ErrorFile,[switch]$RestoreOnly)
 $ErrorActionPreference = 'Stop'
@@ -281,6 +353,7 @@ bool runPolicyScript(const std::vector<AppLockerRule>& rules,
                      const std::wstring& directory,bool restoreOnly,
                      std::wstring& error) {
     if(!ensureAppIdRunning(error)) return false;
+    if(!ensureAppLockerFltrRunning(error)) return false;
     const auto suffix=std::to_wstring(GetCurrentProcessId());
     const auto script=directory+L"\\Himaya-AppLocker-"+suffix+L".ps1";
     const auto input=directory+L"\\Himaya-AppLocker-"+suffix+L".txt";
@@ -325,6 +398,7 @@ bool runPolicyScript(const std::vector<AppLockerRule>& rules,
         if(error.empty()) error=L"Windows rejected the AppLocker policy update. Exit code: "+std::to_wstring(exitCode);
         return false;
     }
+    if(restoreOnly && !restoreAppLockerFltr(error)) return false;
     if(restoreOnly && !restoreAppIdConfiguration(error)) return false;
     DeleteFileW(script.c_str());DeleteFileW(input.c_str());DeleteFileW(policy.c_str());DeleteFileW(errorFile.c_str());
     return true;
