@@ -22,6 +22,7 @@ namespace {
 constexpr wchar_t kBegin[] = L"# BEGIN HIMAYA MANAGED BLOCK";
 constexpr wchar_t kEnd[] = L"# END HIMAYA MANAGED BLOCK";
 constexpr wchar_t kAdultFeed[] = L"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts";
+constexpr wchar_t kAdultFeedMirror[] = L"https://sbc.io/hosts/alternates/porn/hosts";
 
 std::wstring trim(std::wstring value) {
     const auto first = value.find_first_not_of(L" \t\r\n");
@@ -67,7 +68,7 @@ std::wstring normalizeDomain(std::wstring input) {
     return validDomain(input) ? input : L"";
 }
 
-bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
+bool downloadAdultFeedFromUrl(std::set<std::wstring>& domains, std::wstring& error, const wchar_t* feedUrl) {
     wchar_t hostBuffer[256]{};
     wchar_t pathBuffer[2048]{};
     URL_COMPONENTS parts{};
@@ -76,7 +77,7 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
     parts.dwHostNameLength = static_cast<DWORD>(std::size(hostBuffer));
     parts.lpszUrlPath = pathBuffer;
     parts.dwUrlPathLength = static_cast<DWORD>(std::size(pathBuffer));
-    if (!WinHttpCrackUrl(kAdultFeed, 0, 0, &parts)) {
+    if (!WinHttpCrackUrl(feedUrl, 0, 0, &parts)) {
         error = L"Could not parse the website list URL.";
         return false;
     }
@@ -138,6 +139,7 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
     WinHttpCloseHandle(request); WinHttpCloseHandle(connection); WinHttpCloseHandle(session);
     if (body.empty()) { error = L"The downloaded website list is empty."; return false; }
 
+    const size_t domainsBeforeDownload = domains.size();
     std::istringstream stream(body);
     std::string line;
     while (std::getline(stream, line)) {
@@ -152,8 +154,23 @@ bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
         // Do not invent www.<host> entries for subdomains such as ww.example.com.
         if (!normalized.empty()) domains.insert(std::move(normalized));
     }
-    if (domains.empty()) { error = L"No valid domains were found in the downloaded list."; return false; }
+    if (domains.size() == domainsBeforeDownload) {
+        error = L"The downloaded response contained no valid host entries.";
+        return false;
+    }
     return true;
+}
+
+bool downloadAdultFeed(std::set<std::wstring>& domains, std::wstring& error) {
+    std::wstring primaryError;
+    if (downloadAdultFeedFromUrl(domains, primaryError, kAdultFeed)) return true;
+
+    std::wstring mirrorError;
+    if (downloadAdultFeedFromUrl(domains, mirrorError, kAdultFeedMirror)) return true;
+
+    error = L"Could not update the adult website list. The primary source failed: " +
+            primaryError + L" The backup source failed: " + mirrorError;
+    return false;
 }
 
 std::wstring hostsPath() {
