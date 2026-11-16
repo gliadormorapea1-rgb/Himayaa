@@ -162,9 +162,9 @@ void MainWindow::layoutControls() {
     move(dashboardDns_,x+cardW+gap+16,cardY+cardH+gap+16,cardW-32,cardH-32);
 
     const int col=(contentW-36)/3, rowY=145;
-    move(categoryLabel_,x,rowY, col,22); move(category_,x,rowY+26,col,34);
-    move(profileLabel_,x+col+18,rowY,col,22); move(profile_,x+col+18,rowY+26,col,34);
-    move(durationLabel_,x+2*(col+18),rowY,col,22); move(duration_,x+2*(col+18),rowY+26,col,34);
+    move(categoryLabel_,x,rowY, col,22); move(category_,x,rowY+26,col,150);
+    move(profileLabel_,x+col+18,rowY,col,22); move(profile_,x+col+18,rowY+26,col,110);
+    move(durationLabel_,x+2*(col+18),rowY,col,22); move(duration_,x+2*(col+18),rowY+26,col,190);
     move(inputLabel_,x,226,contentW,22);
     const int browseW=132, addW=150;
     move(input_,x,254,contentW-browseW-addW-20,38);
