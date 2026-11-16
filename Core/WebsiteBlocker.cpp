@@ -327,15 +327,19 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
             domains.insert(L"www." + domain);
         }
     }
+    std::wstring feedWarning;
     if (includeAdultFeed) {
-        std::wstring error;
-        if (!downloadAdultFeed(domains, error)) return {false, 0, error};
-
-        // Supplemental adult domains that may be missing from the community feed.
+        // Always include these built-in adult domains, even when the online feed is unavailable.
         domains.insert(L"xnxx-arabic.com");
         domains.insert(L"www.xnxx-arabic.com");
         domains.insert(L"ww.xnxx-arabic.com");
         domains.insert(L"www.ww.xnxx-arabic.com");
+
+        // The online feed is an additional source; its failure must not prevent
+        // built-in domains and user-managed rules from being applied.
+        if (!downloadAdultFeed(domains, feedWarning)) {
+            // Continue with the built-in and user-provided domains.
+        }
     }
     if (domains.empty()) return {false, 0, L"There are no valid websites to block."};
 
@@ -363,7 +367,14 @@ WebsiteBlockResult WebsiteBlocker::apply(const std::vector<std::wstring>& userDo
     updated += kEnd; updated += L"\r\n";
     if (!writeAtomically(path, updated)) return {false, 0, L"Could not update the hosts file. The original file was not replaced."};
     const bool dnsFlushed = flushDns();
-    return {true, domains.size(), dnsFlushed ? L"Domain blocking was applied and the DNS cache was flushed." : L"Blocking rules were written, but the DNS cache could not be flushed automatically. Restart your browser or run ipconfig /flushdns."};
+    std::wstring resultMessage = dnsFlushed
+        ? L"Domain blocking was applied and the DNS cache was flushed."
+        : L"Blocking rules were written, but the DNS cache could not be flushed automatically. Restart your browser or run ipconfig /flushdns.";
+    if (!feedWarning.empty()) {
+        resultMessage += L" The online adult list could not be refreshed, so built-in adult domains and your custom rules were applied without the updated community list. Details: ";
+        resultMessage += feedWarning;
+    }
+    return {true, domains.size(), std::move(resultMessage)};
 }
 
 WebsiteBlockResult WebsiteBlocker::restore() {
