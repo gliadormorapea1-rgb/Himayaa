@@ -44,7 +44,7 @@ jobs:
             'LR"PS\((?<script>.*?)\)PS";',
             [System.Text.RegularExpressions.RegexOptions]::Singleline
           )
-          if ($matches.Count -ne 2) { throw "Expected exactly two embedded DNS PowerShell script parts." }
+          if ($matches.Count -ne 4) { throw "Expected exactly four embedded DNS PowerShell script parts." }
           $scriptText = ($matches | ForEach-Object { $_.Groups["script"].Value }) -join ""
           $tokens = $null
           $parseErrors = $null
