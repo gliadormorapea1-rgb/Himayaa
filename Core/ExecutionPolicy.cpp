@@ -323,10 +323,12 @@ PolicySyncResult ExecutionPolicy::synchronize(ConfigStore& store) {
     return {true,rules.size(),L"AppLocker execution rules and folder access restrictions were updated."};
 }
 PolicySyncResult ExecutionPolicy::restoreAll() {
-    ConfigStore store;
-    if(!store.isReady()) return {false,0,L"Could not open the Himaya database to locate policy work files."};
+    wchar_t programData[MAX_PATH]{};
+    const DWORD length=GetEnvironmentVariableW(L"ProgramData",programData,MAX_PATH);
+    if(!length || length>=MAX_PATH) return {false,0,L"Could not locate the ProgramData directory to restore AppLocker policy."};
+    const std::wstring workingDirectory=std::wstring(programData)+L"\\Himaya";
     std::wstring error;
-    if(!AppLockerPolicy::restore(store.directory(),error))
+    if(!AppLockerPolicy::restore(workingDirectory,error))
         return {false,0,L"Could not remove Himaya AppLocker rules: "+error};
     if(!removeManagedRules()) return {false,0,L"Could not remove legacy Himaya SRP rules."};
     if(!synchronizeFolderAccess({})) return {false,0,L"Could not restore permissions for some folders."};
