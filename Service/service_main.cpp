@@ -1,6 +1,8 @@
 #include "../Core/ConfigStore.h"
 #include "../Core/ExecutionPolicy.h"
 #include "../Core/DnsProtection.h"
+#include "../Core/WebsiteBlocker.h"
+#include <vector>
 #include <windows.h>
 #include <string>
 
@@ -36,8 +38,24 @@ void WINAPI serviceMain(DWORD,LPWSTR*) {
     }
     report(SERVICE_RUNNING);
     store.logEvent(L"guard_service_started",L"Windows service started");
+    std::wstring lastWebsiteSet;
     for(;;){
         const auto result=himaya::ExecutionPolicy::synchronize(store);
+        std::vector<std::wstring> websiteDomains;
+        for(const auto& entry:store.load(L"websites")) websiteDomains.push_back(entry.value);
+        std::wstring websiteSet;
+        for(const auto& domain:websiteDomains) { websiteSet+=domain; websiteSet.push_back(L'\n'); }
+        if(websiteSet!=lastWebsiteSet) {
+            const auto websiteResult = websiteDomains.empty()
+                ? himaya::WebsiteBlocker::restore()
+                : himaya::WebsiteBlocker::apply(websiteDomains,false);
+            if(websiteResult.success) {
+                lastWebsiteSet=websiteSet;
+                store.logEvent(L"website_policy_synced",websiteSet.empty()?L"Managed website rules restored after expiry or removal.":std::to_wstring(websiteResult.blockedDomains));
+            } else {
+                store.logEvent(L"website_policy_sync_error",websiteResult.message);
+            }
+        }
         if(!result.success) store.logEvent(L"execution_policy_error",result.message);
         if(store.getSetting(L"adult_dns_enabled",L"0")==L"1") {
             const auto dns=himaya::DnsProtection::synchronize();
