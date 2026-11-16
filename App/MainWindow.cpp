@@ -70,7 +70,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE: {
         auto title = makeControl(hwnd_, L"STATIC", L"HIMAYA  |  DIGITAL WELLNESS PROTECTION", SS_LEFT, 28,18,960,42,0,instance_);
         setFont(title);
-        auto subtitle = makeControl(hwnd_, L"STATIC", L"Manage application, website, and folder protection — Version 0.6.0", SS_LEFT, 30,60,950,28,0,instance_);
+        auto subtitle = makeControl(hwnd_, L"STATIC", L"Manage application, website, and folder protection — Version 0.7.0", SS_LEFT, 30,60,950,28,0,instance_);
         setFont(subtitle);
         settings_ = makeControl(hwnd_, L"STATIC", L"Protect applications, websites, and folders with locally managed, reversible rules", SS_LEFT, 30,98,960,28,0,instance_);
         setFont(settings_);
@@ -113,7 +113,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         restoreSites_ = makeControl(hwnd_, L"BUTTON", L"Restore website settings", BS_PUSHBUTTON, 405,640,260,38,ID_RESTORE_SITES,instance_);
         restoreOriginalHosts_ = makeControl(hwnd_, L"BUTTON", L"Restore original hosts file", BS_PUSHBUTTON, 680,640,310,38,ID_RESTORE_ORIGINAL_HOSTS,instance_);
         summary_ = makeControl(hwnd_, L"STATIC", L"Database: Loading...", SS_LEFT, 30,690,960,26,0,instance_);
-        status_ = makeControl(hwnd_, L"STATIC", L"Website blocking uses the Windows hosts file. HimayaGuard enforces application and folder execution rules.", SS_LEFT, 30,725,960,40,0,instance_);
+        status_ = makeControl(hwnd_, L"STATIC", L"Website blocking uses the Windows hosts file. HimayaGuard enforces AppLocker application rules and folder access restrictions.", SS_LEFT, 30,725,960,40,0,instance_);
         EnumChildWindows(hwnd_, [](HWND child, LPARAM font) -> BOOL {
             SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
             SetWindowTheme(child,L"DarkMode_Explorer",nullptr);
