@@ -1,17 +1,47 @@
 #pragma once
+
 #include <string>
 #include <vector>
 
+struct sqlite3;
+
 namespace himaya {
+
+struct Entry {
+    std::wstring value;
+    std::wstring lockMode;
+    std::wstring profile;
+};
+
 class ConfigStore {
 public:
     ConfigStore();
+    ~ConfigStore();
+    ConfigStore(const ConfigStore&) = delete;
+    ConfigStore& operator=(const ConfigStore&) = delete;
+
     const std::wstring& directory() const noexcept { return directory_; }
-    std::vector<std::wstring> load(const std::wstring& category) const;
-    bool appendUnique(const std::wstring& category, const std::wstring& value) const;
-    bool remove(const std::wstring& category, const std::wstring& value) const;
+    const std::wstring& databasePath() const noexcept { return databasePath_; }
+    bool isReady() const noexcept { return db_ != nullptr; }
+    const std::wstring& lastError() const noexcept { return lastError_; }
+
+    std::vector<Entry> load(const std::wstring& category) const;
+    bool addEntry(const std::wstring& category, const std::wstring& value,
+                  const std::wstring& lockMode, const std::wstring& profile);
+    bool removeEntry(const std::wstring& category, const std::wstring& value);
+    bool setSetting(const std::wstring& key, const std::wstring& value);
+    std::wstring getSetting(const std::wstring& key, const std::wstring& fallback = L"") const;
+    bool logEvent(const std::wstring& eventType, const std::wstring& details);
+
 private:
+    bool initialize();
+    bool execute(const char* sql);
+    void setError(const char* message);
+
     std::wstring directory_;
-    std::wstring fileFor(const std::wstring& category) const;
+    std::wstring databasePath_;
+    std::wstring lastError_;
+    sqlite3* db_{};
 };
-}
+
+} // namespace himaya

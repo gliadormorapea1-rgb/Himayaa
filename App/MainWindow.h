@@ -15,10 +15,18 @@ private:
     void refreshList();
     void addEntry();
     void removeEntry();
+    void saveProfile();
+    void applyWebsites();
+    void restoreWebsites();
     std::wstring selectedCategory() const;
+    std::wstring selectedDuration() const;
+    std::wstring selectedProfile() const;
+    void setStatus(const std::wstring& value);
 
     HINSTANCE instance_{};
     HWND hwnd_{};
-    HWND category_{}, list_{}, input_{}, status_{};
+    HWND category_{}, profile_{}, duration_{}, list_{}, input_{}, status_{};
+    HWND settings_{}, summary_{}, applySites_{}, restoreSites_{};
+    std::vector<himaya::Entry> visibleEntries_;
     himaya::ConfigStore store_;
 };

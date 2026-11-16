@@ -1,39 +1,20 @@
-# Himaya Security — مصدر التطوير
+# Himaya Security 0.4.0 — Development
 
-المستودع يحتوي حاليًا على ملفين من أجيال مختلفة. **مصدر البناء المعتمد في هذا الفرع هو الأرشيف** `Himaya-0.3.1-Source (2).zip`، ويستخرج GitHub Actions هذا الأرشيف ثم يبني محتوياته. ملفات C++ القديمة الموجودة مباشرة في جذر المستودع هي بقايا الإصدار التأسيسي 0.1.0 وليست هي التي ينتج منها ملف التثبيت الحالي.
+## What is implemented in this branch
 
-## البناء على GitHub
+- SQLite-backed lists and settings under `%ProgramData%\Himaya`.
+- Adult-domain blocking via the Windows hosts file, with an original backup and managed-block restoration.
+- A Windows background service (`HimayaGuard`) installed as LocalSystem.
+- The service synchronizes selected executable and folder execution-deny rules into Windows Software Restriction Policies (SRP). Executable entries must be full existing file paths. Folder entries deny execution below the selected folder; they do not deny browsing or reading files.
 
-- الفرع المعتمد للتطوير: `himaya-0.3-development`.
-- كل Push إلى هذا الفرع يشغّل بناء Windows x64.
-- يمكن تشغيل البناء يدويًا من تبويب Actions عبر `workflow_dispatch`.
-- عند النجاح، ينتج Artifact باسم `Himaya-Windows-x64-v0.3.1` ويحتوي على `Himaya.exe` و`Himaya-Setup.exe`.
-- البناء يستخدم Visual Studio 2022 على Windows Server 2022، وCMake، وInno Setup. يجلب CMake نسخة SQLite الرسمية المثبتة بالإصدار عبر HTTPS.
+## Important limitations
 
-## ما الذي يفعله 0.3.1 بالفعل؟
+- This build does **not** implement folder read/write ACL denial.
+- SRP is an OS policy, not tamper-proof against a local administrator. A local administrator can stop the service, edit policy, or uninstall the app.
+- Website blocking uses the hosts file and a finite community domain list. It is not a network filter and can be bypassed by some VPN, proxy, encrypted DNS, or apps with their own resolver.
+- Trusted-person approval, a 72-hour unlock delay, secure password administration, scheduled feed refresh, and complete recovery/reporting UI are not yet implemented.
+- Service installation and build success do not prove end-to-end enforcement on every Windows 11 configuration. Validate on a Windows 11 Pro test machine before relying on it.
 
-- تخزين محلي باستخدام SQLite في `%ProgramData%\\Himaya`.
-- إدارة قوائم التطبيقات والمواقع والمسارات وأوضاع التعافي في قاعدة البيانات.
-- محرك حظر مواقع فعلي يعتمد ملف Windows `hosts`: قائمة StevenBlack/hosts ذات تصنيف porn مع النطاقات التي يضيفها المستخدم.
-- طلب UAC قبل تعديل ملف النظام، ونسخة احتياطية قبل أول تعديل، وإزالة كتلة Himaya فقط عند الاستعادة، ثم محاولة تفريغ DNS.
-- تطبيع أسماء النطاقات الدولية إلى Punycode.
+## Build
 
-## ما لم يُنفّذ بعد — لا تعتبره ميزة موجودة
-
-- حظر تشغيل التطبيقات فعليًا؛ بيانات التطبيقات ومدد القفل محفوظة فقط.
-- منع الوصول إلى المجلدات والمسارات.
-- خدمة Windows خلفية دائمة.
-- كلمة مرور مشتركة أو موافقة شخص موثوق أو مهلة فك الحظر 72 ساعة.
-- لوحة تقارير متكاملة أو تحديث تلقائي مجدول لقائمة المواقع.
-
-## حدود الحماية
-
-ملف `hosts` يحظر النطاقات المدرجة فقط، ولا يوفر wildcard شاملًا. قد تتجاوز بعض التطبيقات ذلك باستخدام DNS-over-HTTPS أو VPN أو Proxy. قائمة المجتمع ليست كاملة وقد تخطئ في التصنيف. لا يوجد برنامج يمكنه ضمان بقاء الحظر بعد أن يزيل مالك الجهاز مكوناته أو يستعيد إعدادات Windows؛ لذلك توجد آلية استعادة واضحة ولا ندّعي وجود قفل غير قابل للإزالة.
-
-## الاختبار
-
-نجاح GitHub Actions يثبت أن المصدر جُمّع وأن المثبّت أُنشئ. **لا يثبت وحده** أن الحظر يعمل في كل متصفح أو أن كل وظائف المنتج مكتملة. يلزم اختبار تثبيت وتشغيل وحظر واستعادة على Windows 11 Pro قبل الاعتماد على البرنامج.
-
-## المصدر
-
-قائمة المواقع: https://github.com/StevenBlack/hosts
+Pushes to `himaya-0.3-development` run the Windows x64 GitHub Actions workflow. Download the `Himaya-Windows-x64-v0.4.0` artifact after a successful run.
