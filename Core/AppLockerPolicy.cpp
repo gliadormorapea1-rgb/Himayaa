@@ -321,19 +321,25 @@ try {
     $wasDisabled = $converter.State -eq 'Disabled'
     if ($wasDisabled) { Enable-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop | Out-Null }
     try {
-        $beforeRun = (Get-ScheduledTaskInfo -TaskPath $converterPath -TaskName $converterName).LastRunTime
+        $converterStartTime = Get-Date
         Start-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop
         $deadline = (Get-Date).AddSeconds(20)
+        $appliedEvent = $null
         do {
             Start-Sleep -Milliseconds 250
             $converter = Get-ScheduledTask -TaskPath $converterPath -TaskName $converterName -ErrorAction Stop
             $converterInfo = Get-ScheduledTaskInfo -TaskPath $converterPath -TaskName $converterName
-        } while (($converter.State -eq 'Running' -or $converterInfo.LastRunTime -le $beforeRun) -and (Get-Date) -lt $deadline)
-        if ($converter.State -eq 'Running' -or $converterInfo.LastRunTime -le $beforeRun) {
-            throw ('The AppLocker policy converter task did not complete. State='+
-                $converter.State+'; PreviousLastRunTime='+$beforeRun.ToString('o')+
-                '; CurrentLastRunTime='+$converterInfo.LastRunTime.ToString('o')+
-                '; LastTaskResult='+$converterInfo.LastTaskResult)
+            $appliedEvent = Get-WinEvent -FilterHashtable @{
+                LogName='Microsoft-Windows-AppLocker/EXE and DLL'
+                Id=8001
+                StartTime=$converterStartTime
+            } -MaxEvents 1 -ErrorAction SilentlyContinue
+        } while (($converter.State -eq 'Running' -or $null -eq $appliedEvent) -and (Get-Date) -lt $deadline)
+        if ($converter.State -eq 'Running' -or $null -eq $appliedEvent) {
+            throw ('The AppLocker policy converter task did not confirm policy application. State='+
+                $converter.State+'; LastRunTime='+$converterInfo.LastRunTime.ToString('o')+
+                '; LastTaskResult='+$converterInfo.LastTaskResult+
+                '; PolicyAppliedEvent=' + [bool]$appliedEvent)
         }
         if ($converterInfo.LastTaskResult -ne 0) {
             throw ('The AppLocker policy converter task failed. State='+$converter.State+
