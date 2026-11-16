@@ -282,7 +282,10 @@ try {
 )PS",
 LR"PS(            throw 'An existing effective AppLocker EXE policy is set to Audit only. Himaya will not change another policy owner''s enforcement mode.'
         }
-        if ($requested.Count -gt 0 -and -not $hasExternalPolicy) {
+        if (-not $hasExternalPolicy) {
+            # Keep an explicit allow-all EXE collection when Himaya has no
+            # remaining blocks. Removing the entire collection can leave
+            # appid.sys enforcing its previously cached deny policy.
             $allow = $doc.CreateElement('FilePathRule')
             $allow.SetAttribute('Id',([guid]::NewGuid()).ToString('D'))
             $allow.SetAttribute('Name','Himaya baseline allow')
@@ -310,9 +313,6 @@ LR"PS(            throw 'An existing effective AppLocker EXE policy is set to Au
             [void]$conditions.AppendChild($condition)
             [void]$rule.AppendChild($conditions)
             [void]$exe.AppendChild($rule)
-        }
-        if ($external.Count -eq 0 -and $requested.Count -eq 0) {
-            [void]$root.RemoveChild($exe)
         }
     }
     $doc.Save($PolicyFile)
