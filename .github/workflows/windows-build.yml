@@ -52,11 +52,11 @@ jobs:
             Get-FileHash -Algorithm SHA256 $exe | Format-List
           }
 
-      - name: Test Windows execution policy apply and restore
+      - name: Test Windows AppLocker enforcement and restore
         shell: pwsh
         run: |
           & ".\\build\\bin\\HimayaPolicySmokeTest.exe"
-          if ($LASTEXITCODE -ne 0) { throw "Windows SRP policy smoke test failed with exit code $LASTEXITCODE." }
+          if ($LASTEXITCODE -ne 0) { throw "Windows AppLocker enforcement smoke test failed with exit code $LASTEXITCODE." }
 
       - name: Test background Windows service startup
         shell: pwsh
@@ -96,7 +96,7 @@ jobs:
       - name: Upload Windows build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Himaya-Windows-x64-v0.6.0
+          name: Himaya-Windows-x64-v0.7.0
           path: |
             build/bin/Himaya.exe
             build/bin/HimayaGuard.exe
