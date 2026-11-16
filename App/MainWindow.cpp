@@ -60,7 +60,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE: {
         auto title = makeControl(hwnd_, L"STATIC", L"HIMAYA  |  الحماية من الإدمان الرقمي", SS_LEFT, 28,18,960,42,0,instance_);
         setFont(title);
-        auto subtitle = makeControl(hwnd_, L"STATIC", L"إدارة القوائم والسياسات محليًا — الإصدار 0.3.1", SS_LEFT, 30,60,950,28,0,instance_);
+        auto subtitle = makeControl(hwnd_, L"STATIC", L"إدارة القوائم والسياسات محليًا — الإصدار 0.4.0", SS_LEFT, 30,60,950,28,0,instance_);
         setFont(subtitle);
         settings_ = makeControl(hwnd_, L"STATIC", L"السياسات المعتمدة: حظر الإباحية شامل  |  فك القيود بموافقة + مهلة  |  إدارة مشتركة", SS_LEFT, 30,98,960,28,0,instance_);
         setFont(settings_);
