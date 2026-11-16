@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Himaya VERSION 0.6.0 LANGUAGES C CXX)
+project(Himaya VERSION 0.7.0 LANGUAGES C CXX)
 
 if(NOT WIN32)
   message(FATAL_ERROR "Himaya currently targets Windows only.")
@@ -32,10 +32,11 @@ add_library(HimayaCore STATIC
   Core/ConfigStore.cpp
   Core/WebsiteBlocker.cpp
   Core/ExecutionPolicy.cpp
+  Core/AppLockerPolicy.cpp
   "${SQLITE_SOURCE_DIR}/sqlite3.c")
 target_include_directories(HimayaCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${SQLITE_SOURCE_DIR}")
 target_compile_definitions(HimayaCore PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION)
-target_link_libraries(HimayaCore PUBLIC shell32 shlwapi ole32 winhttp normaliz advapi32)
+target_link_libraries(HimayaCore PUBLIC shell32 shlwapi ole32 winhttp normaliz advapi32 wtsapi32)
 if(MSVC)
   target_compile_options(HimayaCore PRIVATE /W4 /permissive- /utf-8)
   set_source_files_properties("${SQLITE_SOURCE_DIR}/sqlite3.c" PROPERTIES COMPILE_OPTIONS "/w")
