@@ -1,9 +1,8 @@
-
 name: Build Himaya for Windows
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, himaya-0.3-development ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
@@ -19,70 +18,59 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Extract Himaya source archive
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -File -Filter "Himaya-0.3.1-Source*.zip" |
+            Select-Object -First 1
+
+          if (!$archive) {
+            throw "Himaya 0.3.1 source ZIP was not found in the repository root."
+          }
+
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath "source" -Force
+
+          $sourceDir = "source/Himaya-0.3.1"
+          if (!(Test-Path "$sourceDir/CMakeLists.txt")) {
+            throw "CMakeLists.txt was not found after extracting the source archive."
+          }
+
+          Write-Host "Source extracted to $sourceDir"
+
       - name: Configure CMake
+        working-directory: source/Himaya-0.3.1
         run: cmake -S . -B build -A x64
 
       - name: Build Release
+        working-directory: source/Himaya-0.3.1
         run: cmake --build build --config Release
 
-      - name: Locate and prepare executable
+      - name: Verify executable
+        working-directory: source/Himaya-0.3.1
         shell: pwsh
         run: |
-          $candidates = @(
-            "build/bin/Release/Himaya.exe",
-            "build/bin/Himaya.exe",
-            "build/Release/Himaya.exe",
-            "build/Himaya.exe"
-          )
-
-          $exe = $candidates |
-            Where-Object { Test-Path $_ } |
-            Select-Object -First 1
-
-          if (!$exe) {
-            Write-Host "Searching for Himaya.exe..."
-            Get-ChildItem build -Recurse -Filter Himaya.exe |
-              Select-Object -ExpandProperty FullName
-
-            throw "Himaya.exe was not generated."
-          }
-
-          New-Item -ItemType Directory -Force -Path "build/bin" |
-            Out-Null
-
-          if ($exe -ne "build/bin/Himaya.exe") {
-            Copy-Item $exe "build/bin/Himaya.exe" -Force
-          }
-
-          Write-Host "Executable ready: build/bin/Himaya.exe"
+          $exe = "build/bin/Himaya.exe"
+          if (!(Test-Path $exe)) { throw "Expected executable was not generated: $exe" }
+          Get-Item $exe | Format-List FullName,Length
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
 
       - name: Build installer
+        working-directory: source/Himaya-0.3.1
         shell: pwsh
         run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-
-          if (!(Test-Path $iscc)) {
-            throw "Inno Setup compiler not found: $iscc"
-          }
-
-          & $iscc "Installer\Himaya.iss"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Inno Setup compilation failed."
-          }
-
-          if (!(Test-Path "Installer/Output/Himaya-Setup.exe")) {
-            throw "Installer was not generated."
-          }
+          $iscc = "${env:ProgramFiles(x86)}\\Inno Setup 6\\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
+          & $iscc "Installer\\Himaya.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
+          if (!(Test-Path "Installer/Output/Himaya-Setup.exe")) { throw "Installer was not generated." }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Himaya-Windows-x64
+          name: Himaya-Windows-x64-v0.3.1
           path: |
-            build/bin/Himaya.exe
-            Installer/Output/Himaya-Setup.exe
+            source/Himaya-0.3.1/build/bin/Himaya.exe
+            source/Himaya-0.3.1/Installer/Output/Himaya-Setup.exe
           if-no-files-found: error
