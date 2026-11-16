@@ -243,22 +243,10 @@ try {
     }
     $doc.Save($PolicyFile)
     Set-AppLockerPolicy -XmlPolicy $PolicyFile -ErrorAction Stop
-    $converter = Get-ScheduledTask -TaskPath '\Microsoft\Windows\AppID\' -TaskName 'PolicyConverter' -ErrorAction SilentlyContinue
-    if ($null -ne $converter) {
-        if ($converter.State -ne 'Running') {
-            try { Start-ScheduledTask -InputObject $converter -ErrorAction Stop }
-            catch {
-                $currentTask = Get-ScheduledTask -TaskPath '\Microsoft\Windows\AppID\' -TaskName 'PolicyConverter' -ErrorAction SilentlyContinue
-                if ($null -eq $currentTask -or $currentTask.State -ne 'Running') { throw }
-            }
-        }
-        $deadline = (Get-Date).AddSeconds(20)
-        do {
-            Start-Sleep -Milliseconds 250
-            $currentTask = Get-ScheduledTask -TaskPath '\Microsoft\Windows\AppID\' -TaskName 'PolicyConverter' -ErrorAction SilentlyContinue
-        } while ($null -ne $currentTask -and $currentTask.State -eq 'Running' -and (Get-Date) -lt $deadline)
-        if ($null -ne $currentTask -and $currentTask.State -eq 'Running') { throw 'The AppLocker policy converter task did not finish in time.' }
-    }
+    $converterPath = Join-Path $env:windir 'System32\\appidpolicyconverter.exe'
+    if (-not (Test-Path -LiteralPath $converterPath)) { throw 'The Windows AppLocker policy converter is unavailable.' }
+    $converterProcess = Start-Process -FilePath $converterPath -Wait -PassThru -WindowStyle Hidden
+    if ($converterProcess.ExitCode -ne 0) { throw ('The AppLocker policy converter failed with exit code '+$converterProcess.ExitCode) }
     if (-not $RestoreOnly) {
         $effectivePolicy = Get-AppLockerPolicy -Effective -ErrorAction Stop
         foreach ($item in $requested) {
