@@ -6,6 +6,7 @@
 #include <shlobj.h>
 #include <dwmapi.h>
 #include <uxtheme.h>
+#include <shlwapi.h>
 #include <string>
 #include <iterator>
 
@@ -240,10 +241,23 @@ void MainWindow::addEntry() {
         MessageBoxW(hwnd_,L"اختر مجلدًا موجودًا من زر استعراض.",L"مسار المجلد غير صالح",MB_OK|MB_ICONWARNING);
         return;
     }
+    if(category==L"paths") {
+        wchar_t executable[MAX_PATH]{};
+        if(GetModuleFileNameW(nullptr,executable,MAX_PATH) && PathIsPrefixW(value,executable)) {
+            MessageBoxW(hwnd_,L"لا يمكن حظر مجلد يحتوي على برنامج Himaya نفسه.",L"مجلد غير مسموح",MB_OK|MB_ICONWARNING);
+            return;
+        }
+        const int answer=MessageBoxW(hwnd_,
+            L"سيمنع Himaya حسابات مستخدمي Windows من فتح هذا المجلد ومحتوياته، وليس تشغيل الملفات فقط. سيحفظ صلاحيات المجلد الأصلية ويعيدها عند حذف القاعدة أو إيقاف خدمة الحماية. لا تختَر مجلدات النظام أو جذر القرص أو مجلد المستخدم الرئيسي. هل تريد المتابعة؟",
+            L"تأكيد منع الوصول للمجلد",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2);
+        if(answer!=IDYES) return;
+    }
     const auto duration = category == L"applications" ? selectedDuration() : L"long";
     if (store_.addEntry(category, value, duration, selectedProfile())) {
         SetWindowTextW(input_, L""); refreshList();
-        setStatus(category == L"websites" ? L"تم حفظ الموقع. اضغط تطبيق حظر المواقع لتفعيل القواعد بصلاحيات المسؤول." : L"تم حفظ القاعدة في SQLite. ستتولى خدمة HimayaGuard تطبيق منع التشغيل تلقائيًا بعد تثبيت الخدمة.");
+        setStatus(category == L"websites" ? L"تم حفظ الموقع. اضغط تطبيق حظر المواقع لتفعيل القواعد بصلاحيات المسؤول." :
+            category == L"paths" ? L"تم حفظ المجلد؛ ستمنع الخدمة الوصول إليه وتشغيل ملفاته، مع حفظ صلاحياته الأصلية للاستعادة." :
+            L"تم حفظ التطبيق؛ ستطبق خدمة HimayaGuard منع تشغيله تلقائيًا.");
     } else {
         MessageBoxW(hwnd_, store_.lastError().empty() ? L"تعذر حفظ العنصر." : store_.lastError().c_str(), L"Himaya", MB_OK|MB_ICONERROR);
     }
@@ -253,7 +267,7 @@ void MainWindow::removeEntry() {
     const LRESULT index = SendMessageW(list_, LB_GETCURSEL, 0, 0);
     if (index == LB_ERR || static_cast<size_t>(index) >= visibleEntries_.size()) return;
     if (store_.removeEntry(selectedCategory(), visibleEntries_[static_cast<size_t>(index)].value)) {
-        refreshList(); setStatus(L"تم حذف القاعدة؛ ستزيل خدمة HimayaGuard سياسة المنع في المزامنة التالية.");
+        refreshList(); setStatus(L"تم حذف القاعدة؛ ستزيل الخدمة منع التشغيل وتستعيد صلاحيات المجلد في المزامنة التالية.");
     }
 }
 
