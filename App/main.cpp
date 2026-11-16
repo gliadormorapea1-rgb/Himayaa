@@ -29,7 +29,7 @@ int runWebsiteMaintenance(const std::wstring& command) {
         }
     }
     const std::wstring message = result.message + (result.success && result.blockedDomains
-        ? L"\nعدد النطاقات: " + std::to_wstring(result.blockedDomains) : L"");
+        ? L"\nDomains blocked: " + std::to_wstring(result.blockedDomains) : L"");
     MessageBoxW(nullptr, message.c_str(), L"Himaya Security", MB_OK | (result.success ? MB_ICONINFORMATION : MB_ICONERROR));
     return result.success ? 0 : 1;
 }
