@@ -38,6 +38,20 @@ std::wstring fullPath(const std::wstring& value) {
     if(!got || got>=n) return {};
     out.resize(got);
     while(out.size()>3 && (out.back()==L'\\' || out.back()==L'/')) out.pop_back();
+
+    // GetTempPathW and some Windows APIs may return 8.3 short names
+    // (for example RUNNER~1). AppLocker event paths are reported in their
+    // long form, so persist a long canonical path to make the rule match
+    // the image path Windows evaluates at process creation time.
+    const DWORD longLength = GetLongPathNameW(out.c_str(), nullptr, 0);
+    if (longLength > 0 && longLength <= 32767) {
+        std::wstring longName(longLength, L'\\0');
+        const DWORD longGot = GetLongPathNameW(out.c_str(), longName.data(), longLength);
+        if (longGot > 0 && longGot < longLength) {
+            longName.resize(longGot);
+            out = std::move(longName);
+        }
+    }
     return out;
 }
 bool within(const std::wstring& path,const std::wstring& root) {
