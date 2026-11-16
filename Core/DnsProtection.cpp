@@ -50,8 +50,12 @@ function Apply-Protection {
   foreach($a in (Get-DnsClientServerAddress)){
     if($a.InterfaceAlias -match 'Loopback'){continue}
     try{
-      if([string]$a.AddressFamily -eq 'IPv4'){Set-DnsClientServerAddress -InterfaceIndex $a.InterfaceIndex -ServerAddresses $dns4 -ErrorAction Stop;$configured++}
-      elseif([string]$a.AddressFamily -eq 'IPv6'){Set-DnsClientServerAddress -InterfaceIndex $a.InterfaceIndex -ServerAddresses $dns6 -ErrorAction Stop}
+      if([string]$a.AddressFamily -eq 'IPv4'){
+        if((@($a.ServerAddresses) -join ',') -ne ($dns4 -join ',')){Set-DnsClientServerAddress -InterfaceIndex $a.InterfaceIndex -ServerAddresses $dns4 -ErrorAction Stop}
+        $configured++
+      } elseif([string]$a.AddressFamily -eq 'IPv6'){
+        if((@($a.ServerAddresses) -join ',') -ne ($dns6 -join ',')){Set-DnsClientServerAddress -InterfaceIndex $a.InterfaceIndex -ServerAddresses $dns6 -ErrorAction Stop}
+      }
     }catch{}
   }
   if($configured -eq 0){throw 'No IPv4 network adapter accepted the CleanBrowsing DNS servers.'}
