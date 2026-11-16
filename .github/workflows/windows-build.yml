@@ -17,73 +17,46 @@ jobs:
       - name: Checkout development branch
         uses: actions/checkout@v4
 
-      - name: Validate and extract canonical source archive
+      - name: Validate canonical source tree
         shell: pwsh
         run: |
-          $archives = @(Get-ChildItem -File -Filter "Himaya-0.3.1-Source*.zip")
-          if ($archives.Count -ne 1) {
-            throw "Expected exactly one Himaya 0.3.1 source archive; found $($archives.Count)."
-          }
-          $archive = $archives[0]
-          Get-FileHash -Algorithm SHA256 $archive.FullName | Format-List
-          Expand-Archive -LiteralPath $archive.FullName -DestinationPath "source" -Force
-
-          $sourceDir = "source/Himaya-0.3.1"
           $required = @(
-            "$sourceDir/CMakeLists.txt",
-            "$sourceDir/App/main.cpp",
-            "$sourceDir/App/MainWindow.cpp",
-            "$sourceDir/Core/ConfigStore.cpp",
-            "$sourceDir/Core/WebsiteBlocker.cpp",
-            "$sourceDir/Installer/Himaya.iss"
+            "CMakeLists.txt",
+            "App/main.cpp",
+            "App/MainWindow.cpp",
+            "Core/ConfigStore.cpp",
+            "Core/WebsiteBlocker.cpp",
+            "Core/ExecutionPolicy.cpp",
+            "Service/service_main.cpp",
+            "Installer/Himaya.iss"
           )
           foreach ($file in $required) {
             if (!(Test-Path $file)) { throw "Required source file missing: $file" }
           }
-          Write-Host "Canonical source validated at $sourceDir"
-
-      - name: Inspect canonical source for implementation work
-        if: always()
-        shell: pwsh
-        run: |
-          $root = "source/Himaya-0.3.1"
-          $files = @("CMakeLists.txt","App/main.cpp","App/MainWindow.h","App/MainWindow.cpp","Core/ConfigStore.h","Core/ConfigStore.cpp","Core/WebsiteBlocker.h","Core/WebsiteBlocker.cpp","Installer/Himaya.iss")
-          foreach ($relative in $files) {
-            $path = Join-Path $root $relative
-            if (Test-Path $path) {
-              $bytes = [System.IO.File]::ReadAllBytes($path)
-              $encoded = [Convert]::ToBase64String($bytes)
-              Write-Host "HIMAYA_SOURCE_BEGIN:$relative"
-              Write-Host $encoded
-              Write-Host "HIMAYA_SOURCE_END:$relative"
-            }
-          }
+          Write-Host "Canonical source validated from repository root."
 
       - name: Configure x64 Release
-        working-directory: source/Himaya-0.3.1
         run: cmake -S . -B build -A x64
 
       - name: Build Release
-        working-directory: source/Himaya-0.3.1
         run: cmake --build build --config Release --parallel
 
-      - name: Verify executable
+      - name: Verify application and service executables
         shell: pwsh
-        working-directory: source/Himaya-0.3.1
         run: |
-          $exe = "build/bin/Himaya.exe"
-          if (!(Test-Path $exe)) { throw "Expected executable was not generated: $exe" }
-          $item = Get-Item $exe
-          if ($item.Length -lt 16384) { throw "Executable is unexpectedly small ($($item.Length) bytes)." }
-          $item | Format-List FullName,Length,LastWriteTime
-          Get-FileHash -Algorithm SHA256 $exe | Format-List
+          foreach ($exe in @("build/bin/Himaya.exe","build/bin/HimayaGuard.exe")) {
+            if (!(Test-Path $exe)) { throw "Expected executable was not generated: $exe" }
+            $item = Get-Item $exe
+            if ($item.Length -lt 16384) { throw "Executable is unexpectedly small ($($item.Length) bytes)." }
+            $item | Format-List FullName,Length,LastWriteTime
+            Get-FileHash -Algorithm SHA256 $exe | Format-List
+          }
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
 
       - name: Build installer
         shell: pwsh
-        working-directory: source/Himaya-0.3.1
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
@@ -97,9 +70,10 @@ jobs:
       - name: Upload Windows build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Himaya-Windows-x64-v0.3.1
+          name: Himaya-Windows-x64-v0.4.0
           path: |
-            source/Himaya-0.3.1/build/bin/Himaya.exe
-            source/Himaya-0.3.1/Installer/Output/Himaya-Setup.exe
+            build/bin/Himaya.exe
+            build/bin/HimayaGuard.exe
+            Installer/Output/Himaya-Setup.exe
           if-no-files-found: error
           retention-days: 30
