@@ -283,7 +283,13 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
     'snapchat.com',
     'tiktok.com',
     'likee.video',
-    'kwai.com'
+    'kwai.com',
+    'x.com',
+    'twitter.com',
+    'reddit.com',
+    'threads.net',
+    'pinterest.com',
+    'tumblr.com'
   )
   Add-PolicyListValues (Join-Path $edge 'URLBlocklist') $chromiumSocialBlocks
   Add-PolicyListValues (Join-Path $chrome 'URLBlocklist') $chromiumSocialBlocks
@@ -297,7 +303,13 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
     '*://*.snapchat.com/*',
     '*://*.tiktok.com/*',
     '*://*.likee.video/*',
-    '*://*.kwai.com/*'
+    '*://*.kwai.com/*',
+    '*://*.x.com/*',
+    '*://*.twitter.com/*',
+    '*://*.reddit.com/*',
+    '*://*.threads.net/*',
+    '*://*.pinterest.com/*',
+    '*://*.tumblr.com/*'
   )
   New-Item -Path (Join-Path $firefoxRoot 'WebsiteFilter') -Force -ErrorAction Stop | Out-Null
   Add-PolicyListValues (Join-Path $firefoxRoot 'WebsiteFilter\Block') $firefoxSocialBlocks
