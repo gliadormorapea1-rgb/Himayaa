@@ -58,8 +58,13 @@ jobs:
           & ".\\build\\bin\\HimayaPolicySmokeTest.exe"
           $testExit = $LASTEXITCODE
           if ($testExit -ne 0) {
+            Write-Host "===== Local AppLocker policy ====="
+            try { Get-AppLockerPolicy -Local -Xml | Out-String -Width 4096 | Write-Host } catch { Write-Host $_ }
+            try { Get-AppLockerPolicy -Local | Format-List * | Out-String -Width 4096 | Write-Host } catch { Write-Host $_ }
             Write-Host "===== Effective AppLocker policy ====="
             try { Get-AppLockerPolicy -Effective -Xml | Out-String -Width 4096 | Write-Host } catch { Write-Host $_ }
+            Write-Host "===== AppLocker policy registry ====="
+            try { Get-ChildItem "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\SrpV2" -Recurse -ErrorAction Stop | Format-List Name,Property | Out-String -Width 4096 | Write-Host } catch { Write-Host $_ }
             Write-Host "===== AppLocker service state ====="
             Get-Service AppIDSvc,AppLockerFltr -ErrorAction SilentlyContinue | Format-List Name,Status,StartType
             foreach ($channel in @(
