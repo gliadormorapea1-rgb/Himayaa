@@ -298,6 +298,7 @@ bool runPolicyScript(const std::vector<AppLockerRule>& rules,
         if(error.empty()) error=L"Windows rejected the AppLocker policy update. Exit code: "+std::to_wstring(exitCode);
         return false;
     }
+    if(restoreOnly && !restoreAppIdConfiguration(error)) return false;
     DeleteFileW(script.c_str());DeleteFileW(input.c_str());DeleteFileW(policy.c_str());DeleteFileW(errorFile.c_str());
     return true;
 }
