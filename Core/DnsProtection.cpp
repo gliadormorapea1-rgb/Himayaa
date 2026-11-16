@@ -266,249 +266,13 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
   function Add-PolicyListValues {
     param([string]$Path, [string[]]$Patterns)
     New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
-    $properties = Get-ItemProperty -LiteralPath $Path -ErrorAction Stop
     foreach ($pattern in $Patterns) {
-      $alreadyPresent = @($properties.PSObject.Properties | Where-Object {
-        $_.Name -notmatch '^PS' -and [string]$_.Value -eq $pattern
-      }).Count -gt 0
-      if ($alreadyPresent) { continue }
-      $usedNames = @($properties.PSObject.Properties | Where-Object {
-        $_.Name -match '^\\d+
-    New-NetFirewallRule -DisplayName $firewallNames[0] -Direction Outbound -Action Block -Protocol TCP -RemotePort 853 -Profile Any -ErrorAction Stop | Out-Null
-  }
-  $known = @('1.1.1.1','1.0.0.1','8.8.8.8','8.8.4.4','9.9.9.9','149.112.112.112','208.67.222.222','208.67.220.220','94.140.14.14','94.140.15.15','2606:4700:4700::1111','2001:4860:4860::8888','2620:fe::fe')
-  if (-not (Get-NetFirewallRule -DisplayName $firewallNames[1] -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName $firewallNames[1] -Direction Outbound -Action Block -Protocol UDP -RemotePort 53 -RemoteAddress $known -Profile Any -ErrorAction Stop | Out-Null
-  }
-  if (-not (Get-NetFirewallRule -DisplayName $firewallNames[2] -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName $firewallNames[2] -Direction Outbound -Action Block -Protocol TCP -RemotePort 53 -RemoteAddress $known -Profile Any -ErrorAction Stop | Out-Null
-  }
-  Write-Log "DNS protection applied. Verified IPv4 adapters: $configuredIPv4; verified IPv6 adapters: $configuredIPv6."
-}
-
-)PS";
-constexpr wchar_t kScriptPart4[] = LR"PS(function Restore-Protection {
-  if (-not (Test-Path -LiteralPath $backupFile)) {
-    Write-Log 'No DNS backup exists; removing only Himaya-owned firewall rules.'
-  } else {
-    $b = Get-Content -LiteralPath $backupFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-    if ($null -eq $b -or $null -eq $b.Dns) {
-      throw 'The DNS backup is invalid. It was preserved; restore was not attempted.'
-    }
-    if ($null -eq $b.PSObject.Properties['BackupVersion'] -and @($b.Dns).Count -eq 0) {
-      throw 'The legacy DNS backup contains no saved interfaces. It was preserved; automatic restore is unsafe.'
-    }
-    $restoreErrors = @()
-    $resolvedDns = @()
-    foreach ($entry in @($b.Dns)) {
-      try {
-        $targetIndex = [int]$entry.InterfaceIndex
-        if ($entry.InterfaceGuid) {
-          $matchingAdapter = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
-            Where-Object { [string]$_.InterfaceGuid -eq [string]$entry.InterfaceGuid } |
-            Select-Object -First 1
-          if ($null -ne $matchingAdapter) { $targetIndex = [int]$matchingAdapter.InterfaceIndex }
-        }
-        $existingAdapter = Get-AdapterForIndex $targetIndex
-        if ($null -eq $existingAdapter) {
-          Write-Log "Restore skipped removed interface index $targetIndex ($($entry.InterfaceAlias))."
-          continue
-        }
-        $family = Get-AddressFamilyName $entry.AddressFamily
-        if ($null -eq $family) { throw "Unknown saved address family '$($entry.AddressFamily)'." }
-        $resolvedDns += [pscustomobject]@{
-          Entry = $entry
-          Index = $targetIndex
-          Adapter = $existingAdapter
-          Family = $family
-          NeedsReset = ([bool]$entry.Dhcp -or @($entry.Servers).Count -eq 0)
-        }
-      } catch {
-        $restoreErrors += "DNS interface $($entry.InterfaceAlias) ($($entry.AddressFamily)): $($_.Exception.Message)"
-      }
-    }
-    # Reset DHCP-managed families first: ResetServerAddresses may reset both
-    # protocol families on an interface. Static families are reapplied second.
-    $resetIndexes = @($resolvedDns | Where-Object { $_.NeedsReset } | Select-Object -ExpandProperty Index -Unique)
-    foreach ($index in $resetIndexes) {
-      try {
-        Set-DnsClientServerAddress -InterfaceIndex ([int]$index) -ResetServerAddresses -ErrorAction Stop
-        Write-Log "Reset DNS to automatic assignment on interface index $index."
-      } catch {
-        $restoreErrors += "DNS reset on interface index ${index}: $($_.Exception.Message)"
-      }
-    }
-    foreach ($item in @($resolvedDns | Where-Object { -not $_.NeedsReset })) {
-      try {
-        Set-DnsClientServerAddress -InterfaceIndex ([int]$item.Index) -ServerAddresses @($item.Entry.Servers) -ErrorAction Stop
-        Write-Log "Restored static $($item.Family) DNS on $($item.Adapter.Name) (index $($item.Index))."
-      } catch {
-        $restoreErrors += "DNS interface $($item.Adapter.Name) ($($item.Family)): $($_.Exception.Message)"
-      }
-    }
-
-    Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name DnsOverHttpsMode -ErrorAction SilentlyContinue
-    Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Google\Chrome' -Name DnsOverHttpsMode -ErrorAction SilentlyContinue
-    Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\BraveSoftware\Brave' -Name DnsOverHttpsMode -ErrorAction SilentlyContinue
-    Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox\DNSOverHTTPS' -Name Enabled,Locked -ErrorAction SilentlyContinue
-
-    if ($null -ne $b.PolicyKeys -and @($b.PolicyKeys).Count -gt 0) {
-      foreach ($policy in @($b.PolicyKeys)) {
-        try {
-          if ($policy.Exists) {
-            $fullPath = Join-Path $root $policy.File
-            if (-not (Test-Path -LiteralPath $fullPath)) { throw "Missing browser policy backup file '$fullPath'." }
-            & reg.exe import $fullPath *> $null
-            $importCode = $LASTEXITCODE
-            if ($importCode -ne 0) { throw "reg.exe import failed with exit code $importCode." }
-          } else {
-            & reg.exe delete $policy.Key /f *> $null
-            $deleteCode = $LASTEXITCODE
-            if ($deleteCode -gt 1) { throw "reg.exe delete failed with exit code $deleteCode." }
-          }
-        } catch { $restoreErrors += "Browser policy $($policy.Key): $($_.Exception.Message)" }
-      }
-    } else {
-      foreach ($policy in @($b.PolicyBackups)) {
-        $fullPath = Join-Path $root $policy.File
-        if (Test-Path -LiteralPath $fullPath) {
-          & reg.exe import $fullPath *> $null
-          $importCode = $LASTEXITCODE
-          if ($importCode -ne 0) { $restoreErrors += "Browser policy import '$($policy.File)' failed with exit code $importCode." }
-        }
-      }
-    }
-
-    foreach ($name in $firewallNames) {
-      try {
-        Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue |
-          Remove-NetFirewallRule -ErrorAction Stop
-      } catch { $restoreErrors += "Firewall rule '$name': $($_.Exception.Message)" }
-    }
-
-    if ($restoreErrors.Count -gt 0) {
-      throw "Restore was incomplete; the original backup was retained. $($restoreErrors -join ' | ')"
-    }
-    Remove-Item -LiteralPath $backupFile -Force -ErrorAction Stop
-    Get-ChildItem $root -Filter 'policy-*.reg' -ErrorAction SilentlyContinue |
-      Remove-Item -Force -ErrorAction SilentlyContinue
-  }
-  foreach ($name in $firewallNames) {
-    Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue |
-      Remove-NetFirewallRule -ErrorAction SilentlyContinue
-  }
-  Write-Log 'Restore completed.'
-}
-
-Write-Log "Starting DNS protection mode '$Mode'."
-try {
-  if ($Mode -eq 'Restore') {
-    Restore-Protection
-  } else {
-    Apply-Protection
-  }
-  Write-Log "Mode '$Mode' completed successfully."
-  exit 0
-} catch {
-  $failure = $_
-  Write-Log "FAILED: $($failure.Exception.Message)"
-  try {
-    $details = $failure | Format-List * -Force | Out-String
-    Add-Content -LiteralPath $logFile -Value $details -Encoding UTF8 -ErrorAction Stop
-  } catch {}
-  if ($Mode -ne 'Restore' -and (Test-Path -LiteralPath $backupFile)) {
-    $rollbackAllowed = $false
-    try {
-      $rollbackBackup = Get-Content -LiteralPath $backupFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-      $rollbackAllowed = (
-        [int]$rollbackBackup.BackupVersion -eq 2 -and
-        @($rollbackBackup.Dns).Count -gt 0 -and
-        [bool]$rollbackBackup.PolicyBackupComplete
-      )
-    } catch {}
-    if ($rollbackAllowed) {
-      try {
-        Write-Log 'Attempting automatic rollback using the validated backup.'
-        Restore-Protection
-        Write-Log 'Automatic rollback completed.'
-      } catch {
-        Write-Log "AUTOMATIC ROLLBACK FAILED; backup retained: $($_.Exception.Message)"
-        try { Add-Content -LiteralPath $logFile -Value ($_ | Format-List * -Force | Out-String) -Encoding UTF8 } catch {}
-      }
-    } else {
-      Write-Log 'Automatic rollback skipped because the backup is legacy, incomplete, or unvalidated; original backup preserved.'
-    }
-  }
-  exit 1
-}
-)PS";
-std::wstring buildScript(){
-  std::wstring result(kScriptPart1);
-  result += kScriptPart2;
-  result += kScriptPart3;
-  result += kScriptPart4;
-  return result;
-}
-std::wstring rootPath(){
-  PWSTR raw=nullptr;
-  if(FAILED(SHGetKnownFolderPath(FOLDERID_ProgramData,KF_FLAG_CREATE,nullptr,&raw))||!raw)return {};
-  std::filesystem::path p(raw);CoTaskMemFree(raw);p/=L"Himaya";
-  std::error_code ec;std::filesystem::create_directories(p,ec);return ec?L"":p.wstring();
-}
-bool writeScript(const std::wstring& path){
-  const std::wstring scriptText=buildScript();
-  const int n=WideCharToMultiByte(CP_UTF8,0,scriptText.c_str(),-1,nullptr,0,nullptr,nullptr);if(n<=1)return false;
-  std::string data(static_cast<size_t>(n),'\0');
-  if(!WideCharToMultiByte(CP_UTF8,0,scriptText.c_str(),-1,data.data(),n,nullptr,nullptr))return false;
-  data.resize(n-1);
-  const auto tmp=path+L".tmp";
-  HANDLE h=CreateFileW(tmp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
-  if(h==INVALID_HANDLE_VALUE)return false;
-  const BYTE bom[]={0xEF,0xBB,0xBF};DWORD written=0;
-  bool ok=WriteFile(h,bom,3,&written,nullptr)&&written==3;size_t pos=0;
-  while(ok&&pos<data.size()){
-    DWORD chunk=static_cast<DWORD>(std::min<size_t>(data.size()-pos,1024*1024));written=0;
-    ok=WriteFile(h,data.data()+pos,chunk,&written,nullptr)&&written>0;pos+=written;
-  }
-  if(ok)ok=FlushFileBuffers(h)!=FALSE;
-  CloseHandle(h);
-  if(!ok){DeleteFileW(tmp.c_str());return false;}
-  return MoveFileExW(tmp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;
-}
-DnsProtectionResult run(const wchar_t* mode){
-  const auto root=rootPath();if(root.empty())return {false,L"Could not access Himaya ProgramData."};
-  const auto script=(std::filesystem::path(root)/L"DnsProtection.ps1").wstring();
-  if(!writeScript(script))return {false,L"Could not write DNS protection script."};
-  wchar_t sys[MAX_PATH]{};const UINT n=GetSystemDirectoryW(sys,MAX_PATH);
-  if(!n||n>=MAX_PATH)return {false,L"Could not locate Windows PowerShell."};
-  std::wstring cmd=L"\""+std::wstring(sys)+L"\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+script+L"\" -Mode "+mode;
-  STARTUPINFOW si{};si.cb=sizeof(si);PROCESS_INFORMATION pi{};
-  std::vector<wchar_t> buf(cmd.begin(),cmd.end());buf.push_back(L'\0');
-  if(!CreateProcessW(nullptr,buf.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&si,&pi))
-    return {false,L"Could not start PowerShell."};
-  const DWORD wait=WaitForSingleObject(pi.hProcess,90000);DWORD code=STILL_ACTIVE;
-  const bool ok=wait==WAIT_OBJECT_0&&GetExitCodeProcess(pi.hProcess,&code);
-  if(wait==WAIT_TIMEOUT)TerminateProcess(pi.hProcess,ERROR_TIMEOUT);
-  CloseHandle(pi.hThread);CloseHandle(pi.hProcess);
-  if(!ok||code!=0){
-    const auto log=(std::filesystem::path(root)/L"Logs"/L"DnsProtection.log").wstring();
-    return {false,L"DNS protection failed (PowerShell exit code "+std::to_wstring(ok?code:ERROR_GEN_FAILURE)+L"). Diagnostic log: "+log};
-  }
-  return {true,std::wstring(mode)==L"Restore"
-    ?L"Original DNS and browser policy settings restored; Himaya DNS firewall rules removed."
-    :L"CleanBrowsing Family DNS, browser DNS policies and DNS firewall protections applied."};
-}
-}
-DnsProtectionResult DnsProtection::enable(){return run(L"Enable");}
-DnsProtectionResult DnsProtection::synchronize(){return run(L"Sync");}
-DnsProtectionResult DnsProtection::restore(){return run(L"Restore");}
-}
-
-      } | ForEach-Object { [string]$_.Name })
-      $nextName = 1
-      while ($usedNames -contains [string]$nextName) { $nextName++ }
-      New-ItemProperty -LiteralPath $Path -Name ([string]$nextName) -PropertyType String -Value $pattern -Force -ErrorAction Stop | Out-Null
       $properties = Get-ItemProperty -LiteralPath $Path -ErrorAction Stop
+      $values = @($properties.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { [string]$_.Value })
+      if ($values -contains $pattern) { continue }
+      $slot = 900
+      while ($null -ne $properties.PSObject.Properties[[string]$slot]) { $slot++ }
+      New-ItemProperty -LiteralPath $Path -Name ([string]$slot) -PropertyType String -Value $pattern -Force -ErrorAction Stop | Out-Null
     }
   }
 
@@ -527,6 +291,7 @@ DnsProtectionResult DnsProtection::restore(){return run(L"Restore");}
   Add-PolicyListValues (Join-Path $chrome 'URLBlocklist') $chromiumSocialBlocks
   Add-PolicyListValues (Join-Path $brave 'URLBlocklist') $chromiumSocialBlocks
 
+  $firefoxRoot = 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
   $firefoxSocialBlocks = @(
     '*://*.youtube.com/shorts/*',
     '*://*.instagram.com/reels/*',
@@ -538,7 +303,7 @@ DnsProtectionResult DnsProtection::restore(){return run(L"Restore");}
     '*://*.likee.video/*',
     '*://*.kwai.com/*'
   )
-  Add-PolicyListValues (Join-Path $firefox 'WebsiteFilter/Block') $firefoxSocialBlocks
+  Add-PolicyListValues (Join-Path $firefoxRoot 'WebsiteFilter\Block') $firefoxSocialBlocks
   Write-Log 'Browser URL policies for short-form video feeds were applied to Edge, Chrome, Brave and Firefox.'
 
   if (-not (Get-NetFirewallRule -DisplayName $firewallNames[0] -ErrorAction SilentlyContinue)) {
