@@ -7,7 +7,7 @@
 namespace {
 int runWebsiteMaintenance(const std::wstring& command) {
     if (!himaya::WebsiteBlocker::isAdministrator()) {
-        MessageBoxW(nullptr, L"تعذر الحصول على صلاحيات المسؤول.", L"Himaya Security", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, L"Administrator privileges are required.", L"Himaya Security", MB_OK | MB_ICONERROR);
         return 5;
     }
     himaya::WebsiteBlockResult result;
@@ -50,7 +50,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand) {
     InitCommonControlsEx(&controls);
     MainWindow window(instance);
     if (!window.create(showCommand)) {
-        MessageBoxW(nullptr, L"تعذر تشغيل Himaya.", L"Himaya", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, L"Could not start Himaya.", L"Himaya", MB_OK | MB_ICONERROR);
         return 1;
     }
     return window.run();
