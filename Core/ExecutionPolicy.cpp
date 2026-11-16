@@ -45,7 +45,7 @@ std::wstring fullPath(const std::wstring& value) {
     // the image path Windows evaluates at process creation time.
     const DWORD longLength = GetLongPathNameW(out.c_str(), nullptr, 0);
     if (longLength > 0 && longLength <= 32767) {
-        std::wstring longName(longLength, L'\\0');
+        std::wstring longName(longLength, L'\0');
         const DWORD longGot = GetLongPathNameW(out.c_str(), longName.data(), longLength);
         if (longGot > 0 && longGot < longLength) {
             longName.resize(longGot);
