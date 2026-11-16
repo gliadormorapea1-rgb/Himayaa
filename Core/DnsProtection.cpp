@@ -277,6 +277,9 @@ function Restore-Protection {
     if ($null -eq $b -or $null -eq $b.Dns) {
       throw 'The DNS backup is invalid. It was preserved; restore was not attempted.'
     }
+    if ($null -eq $b.PSObject.Properties['BackupVersion'] -and @($b.Dns).Count -eq 0) {
+      throw 'The legacy DNS backup contains no saved interfaces. It was preserved; automatic restore is unsafe.'
+    }
     $restoreErrors = @()
     $resolvedDns = @()
     foreach ($entry in @($b.Dns)) {
@@ -314,7 +317,7 @@ function Restore-Protection {
         Set-DnsClientServerAddress -InterfaceIndex ([int]$index) -ResetServerAddresses -ErrorAction Stop
         Write-Log "Reset DNS to automatic assignment on interface index $index."
       } catch {
-        $restoreErrors += "DNS reset on interface index $index: $($_.Exception.Message)"
+        $restoreErrors += "DNS reset on interface index ${index}: $($_.Exception.Message)"
       }
     }
     foreach ($item in @($resolvedDns | Where-Object { -not $_.NeedsReset })) {
@@ -396,13 +399,26 @@ try {
     Add-Content -LiteralPath $logFile -Value $details -Encoding UTF8 -ErrorAction Stop
   } catch {}
   if ($Mode -ne 'Restore' -and (Test-Path -LiteralPath $backupFile)) {
+    $rollbackAllowed = $false
     try {
-      Write-Log 'Attempting automatic rollback after failed enable/sync.'
-      Restore-Protection
-      Write-Log 'Automatic rollback completed.'
-    } catch {
-      Write-Log "AUTOMATIC ROLLBACK FAILED; backup retained: $($_.Exception.Message)"
-      try { Add-Content -LiteralPath $logFile -Value ($_ | Format-List * -Force | Out-String) -Encoding UTF8 } catch {}
+      $rollbackBackup = Get-Content -LiteralPath $backupFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+      $rollbackAllowed = (
+        [int]$rollbackBackup.BackupVersion -eq 2 -and
+        @($rollbackBackup.Dns).Count -gt 0 -and
+        [bool]$rollbackBackup.PolicyBackupComplete
+      )
+    } catch {}
+    if ($rollbackAllowed) {
+      try {
+        Write-Log 'Attempting automatic rollback using the validated backup.'
+        Restore-Protection
+        Write-Log 'Automatic rollback completed.'
+      } catch {
+        Write-Log "AUTOMATIC ROLLBACK FAILED; backup retained: $($_.Exception.Message)"
+        try { Add-Content -LiteralPath $logFile -Value ($_ | Format-List * -Force | Out-String) -Encoding UTF8 } catch {}
+      }
+    } else {
+      Write-Log 'Automatic rollback skipped because the backup is legacy, incomplete, or unvalidated; original backup preserved.'
     }
   }
   exit 1
