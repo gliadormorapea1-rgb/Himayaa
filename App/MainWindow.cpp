@@ -13,7 +13,7 @@
 namespace {
 constexpr wchar_t kClassName[] = L"HimayaMainWindow";
 enum : int { ID_CATEGORY=1001, ID_LIST=1002, ID_INPUT=1003, ID_ADD=1004, ID_REMOVE=1005,
-             ID_REFRESH=1006, ID_PROFILE=1007, ID_DURATION=1008, ID_APPLY_SITES=1009, ID_RESTORE_SITES=1010, ID_BROWSE=1011, ID_REPORT=1012 };
+             ID_REFRESH=1006, ID_PROFILE=1007, ID_DURATION=1008, ID_APPLY_SITES=1009, ID_RESTORE_SITES=1010, ID_BROWSE=1011, ID_REPORT=1012, ID_RESTORE_ORIGINAL_HOSTS=1013 };
 HWND makeControl(HWND parent, const wchar_t* cls, const wchar_t* text, DWORD style,
                  int x,int y,int w,int h,int id,HINSTANCE inst) {
     return CreateWindowExW(0, cls, text, WS_CHILD|WS_VISIBLE|style, x,y,w,h,parent,
@@ -111,6 +111,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         makeControl(hwnd_, L"BUTTON", L"Export activity log (CSV)", BS_PUSHBUTTON, 420,590,220,36,ID_REPORT,instance_);
         applySites_ = makeControl(hwnd_, L"BUTTON", L"Apply adult and custom website blocking", BS_PUSHBUTTON, 30,640,360,38,ID_APPLY_SITES,instance_);
         restoreSites_ = makeControl(hwnd_, L"BUTTON", L"Restore website settings", BS_PUSHBUTTON, 405,640,260,38,ID_RESTORE_SITES,instance_);
+        restoreOriginalHosts_ = makeControl(hwnd_, L"BUTTON", L"Restore original hosts file", BS_PUSHBUTTON, 680,640,310,38,ID_RESTORE_ORIGINAL_HOSTS,instance_);
         summary_ = makeControl(hwnd_, L"STATIC", L"Database: Loading...", SS_LEFT, 30,690,960,26,0,instance_);
         status_ = makeControl(hwnd_, L"STATIC", L"Website blocking uses the Windows hosts file. HimayaGuard enforces application and folder execution rules.", SS_LEFT, 30,725,960,40,0,instance_);
         EnumChildWindows(hwnd_, [](HWND child, LPARAM font) -> BOOL {
@@ -136,6 +137,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         case ID_REPORT: exportReport(); return 0;
         case ID_APPLY_SITES: applyWebsites(); return 0;
         case ID_RESTORE_SITES: restoreWebsites(); return 0;
+        case ID_RESTORE_ORIGINAL_HOSTS: restoreOriginalHosts(); return 0;
         }
         break;
     case WM_ERASEBKGND: {
@@ -200,6 +202,7 @@ void MainWindow::refreshList() {
     }
     if (applySites_) EnableWindow(applySites_, selectedCategory() == L"websites");
     if (restoreSites_) EnableWindow(restoreSites_, selectedCategory() == L"websites");
+    if (restoreOriginalHosts_) EnableWindow(restoreOriginalHosts_, selectedCategory() == L"websites");
     if (browse_) EnableWindow(browse_, selectedCategory() != L"websites");
 }
 
@@ -313,6 +316,19 @@ void MainWindow::exportReport() {
                 MB_OK | MB_ICONINFORMATION);
 }
 
+void MainWindow::restoreOriginalHosts() {
+    if (selectedCategory() != L"websites") return;
+    const int answer = MessageBoxW(hwnd_,
+        L"This will replace the entire current Windows hosts file with the original backup created by Himaya before its first change. Any hosts-file edits made after that backup (including edits made by other programs or by you) will be lost. The backup will be kept. Continue?",
+        L"Confirm original hosts file restoration", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+    if (answer != IDYES) return;
+
+    const auto result = himaya::WebsiteBlocker::restoreOriginal();
+    if (result.success) store_.logEvent(L"hosts_original_restored", result.message);
+    setStatus(result.message);
+    MessageBoxW(hwnd_, result.message.c_str(), L"Himaya Security",
+                MB_OK | (result.success ? MB_ICONINFORMATION : MB_ICONERROR));
+}
 void MainWindow::restoreWebsites() {
     if (selectedCategory() != L"websites") return;
     const int answer = MessageBoxW(hwnd_,
