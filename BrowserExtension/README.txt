@@ -17,6 +17,5 @@ Instagram and Facebook use their known route patterns. Additional domains saved
 in Himaya can be granted individually through the popup; common /shorts, /reel
 and /reels routes are blocked on those domains.
 
-The native host reads only the Himaya settings database and does not have write
-access to it. If the host is unavailable, the extension fails open; existing
+The native host reads only the per-user Himaya Reels settings mirror in the Windows registry and does not have write access to it. If the host is unavailable, the extension fails open; existing
 Himaya application, website and DNS protections remain separate.
