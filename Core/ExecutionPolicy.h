@@ -8,6 +8,6 @@ class ExecutionPolicy {
 public:
     // Applies exact executable rules and folder execution rules through Windows SRP.
     // Must be called by the LocalSystem HimayaGuard service.
-    static PolicySyncResult synchronize(const ConfigStore& store);
+    static PolicySyncResult synchronize(ConfigStore& store);
 };
 }
