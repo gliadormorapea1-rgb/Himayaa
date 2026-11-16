@@ -21,7 +21,7 @@ enum : int {
     ID_RESTORE_ORIGINAL_HOSTS=1013, ID_ENABLE_ADULT_DNS=1014, ID_DISABLE_ADULT_DNS=1015,
     ID_NAV_DASHBOARD=1101, ID_NAV_APPLICATIONS=1102, ID_NAV_WEBSITES=1103,
     ID_NAV_PROTECTION=1104, ID_NAV_LOGS=1105, ID_NAV_STATISTICS=1106,
-    ID_NAV_SETTINGS=1107, ID_THEME=1108
+    ID_NAV_SETTINGS=1107, ID_NAV_HEALTH=1108, ID_THEME=1109, ID_REFRESH_HEALTH=1110
 };
 bool gDarkTheme = true;
 HBRUSH gBackgroundBrush = nullptr;
@@ -185,11 +185,13 @@ void MainWindow::layoutControls() {
     move(statsSummary_,x,150,contentW,390);
     move(settingsDescription_,x,150,contentW,90);
     move(themeToggle_,x,260,230,42);
+    move(healthSummary_,x,150,contentW,430);
+    move(healthRefresh_,x,600,180,42);
     move(status_,x,height-42,contentW,30);
 }
 
 void MainWindow::setPage(int page) {
-    currentPage_=std::clamp(page,0,6);
+    currentPage_=std::clamp(page,0,7);
     if(profileLabel_) ShowWindow(profileLabel_,SW_HIDE);
     if(profile_) ShowWindow(profile_,SW_HIDE);
     auto show=[&](const std::vector<HWND>& group,bool visible) {
@@ -200,6 +202,7 @@ void MainWindow::setPage(int page) {
     show(protectionControls_,currentPage_==3);
     show(statisticsControls_,currentPage_==5);
     show(settingsControls_,currentPage_==6);
+    show(healthControls_,currentPage_==7);
     if (currentPage_==1 || currentPage_==2) {
         show(managementControls_,true);
         if(profileLabel_) ShowWindow(profileLabel_,SW_SHOW);
@@ -225,7 +228,8 @@ void MainWindow::setPage(int page) {
         L"Review the protection profile and DNS filtering controls.",
         L"Recent events recorded by Himaya Security.",
         L"An overview calculated from the data currently stored by Himaya.",
-        L"Customize the appearance of the Himaya interface."
+        L"Customize the appearance of the Himaya interface.",
+        L"Check the live protection service and review saved protection configuration."
     };
     if(pageTitle_) {
         ShowWindow(pageTitle_,SW_HIDE);
@@ -248,6 +252,7 @@ void MainWindow::setPage(int page) {
     if(currentPage_==1 || currentPage_==2 || currentPage_==4) refreshList();
     if(currentPage_==0) refreshDashboard();
     if(currentPage_==5) refreshStatistics();
+    if(currentPage_==7) refreshHealth();
 }
 
 void MainWindow::refreshDashboard() {
@@ -280,6 +285,66 @@ void MainWindow::refreshStatistics() {
     SetWindowTextW(statsSummary_,value.c_str());
 }
 
+
+void MainWindow::refreshHealth() {
+    if(!healthSummary_) return;
+
+    std::wstring serviceState=L"Not checked";
+    DWORD serviceError=ERROR_SUCCESS;
+    SC_HANDLE manager=OpenSCManagerW(nullptr,nullptr,SC_MANAGER_CONNECT);
+    if(!manager) {
+        serviceError=GetLastError();
+        serviceState=L"Cannot query Service Control Manager (error "+std::to_wstring(serviceError)+L")";
+    } else {
+        SC_HANDLE service=OpenServiceW(manager,L"HimayaGuard",SERVICE_QUERY_STATUS);
+        if(!service) {
+            serviceError=GetLastError();
+            serviceState=serviceError==ERROR_SERVICE_DOES_NOT_EXIST
+                ? L"Not installed"
+                : L"Unavailable (error "+std::to_wstring(serviceError)+L")";
+        } else {
+            SERVICE_STATUS_PROCESS status{};
+            DWORD bytesNeeded=0;
+            if(QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,
+                reinterpret_cast<LPBYTE>(&status),sizeof(status),&bytesNeeded)) {
+                switch(status.dwCurrentState) {
+                    case SERVICE_RUNNING: serviceState=L"Running"; break;
+                    case SERVICE_START_PENDING: serviceState=L"Starting"; break;
+                    case SERVICE_STOP_PENDING: serviceState=L"Stopping"; break;
+                    case SERVICE_STOPPED: serviceState=L"Stopped"; break;
+                    case SERVICE_PAUSED: serviceState=L"Paused"; break;
+                    default: serviceState=L"State code "+std::to_wstring(status.dwCurrentState); break;
+                }
+            } else {
+                serviceError=GetLastError();
+                serviceState=L"Status query failed (error "+std::to_wstring(serviceError)+L")";
+            }
+            CloseServiceHandle(service);
+        }
+        CloseServiceHandle(manager);
+    }
+
+    const bool databaseReady=store_.isReady();
+    const auto apps=databaseReady?store_.load(L"applications"):std::vector<himaya::Entry>{};
+    const auto sites=databaseReady?store_.load(L"websites"):std::vector<himaya::Entry>{};
+    const auto folders=databaseReady?store_.load(L"paths"):std::vector<himaya::Entry>{};
+    const bool dnsConfigured=databaseReady && store_.getSetting(L"adult_dns_enabled",L"0")==L"1";
+    const auto events=databaseReady?store_.loadRecentEvents(1):std::vector<himaya::Event>{};
+
+    std::wstring report=L"PROTECTION SERVICE\n"+serviceState+
+        L"\n\nLOCAL DATABASE\n"+(databaseReady?L"Available":L"Unavailable — "+store_.lastError())+
+        L"\n\nADULT DNS SETTING\n"+(dnsConfigured?L"Enabled in saved configuration":L"Disabled in saved configuration")+
+        L"\n\nSAVED BLOCKING RULES\nApplications: "+std::to_wstring(apps.size())+
+        L"\nWebsites: "+std::to_wstring(sites.size())+
+        L"\nProtected folders: "+std::to_wstring(folders.size())+
+        L"\n\nLATEST RECORDED EVENT\n";
+    if(!events.empty()) report+=events.front().timestamp+L"  |  "+events.front().type+L"  |  "+events.front().details;
+    else report+=L"No event available.";
+    report+=L"\n\nNote: DNS status above reflects the saved Himaya setting; it does not independently verify every network adapter's live DNS configuration.";
+    SetWindowTextW(healthSummary_,report.c_str());
+    setStatus(L"Protection health refreshed. Service status was queried directly from Windows.");
+}
+
 LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
@@ -297,6 +362,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         navStatistics_=makeControl(hwnd_,L"BUTTON",L"Statistics",BS_OWNERDRAW,navX,navY+5*(navH+navGap),navW,navH,ID_NAV_STATISTICS,instance_);
         navSettings_=makeControl(hwnd_,L"BUTTON",L"Settings",BS_OWNERDRAW,navX,navY+6*(navH+navGap),navW,navH,ID_NAV_SETTINGS,instance_);
         themeToggle_=makeControl(hwnd_,L"BUTTON",L"Switch to Light Mode",BS_PUSHBUTTON,22,0,185,40,ID_THEME,instance_);
+        auto navHealth=makeControl(hwnd_,L"BUTTON",L"Protection Health",BS_OWNERDRAW,navX,navY+7*(navH+navGap),navW,navH,ID_NAV_HEALTH,instance_);
 
         dashboardApps_=makeControl(hwnd_,L"STATIC",L"APPLICATIONS\n0 blocked",SS_LEFT,0,0,400,90,0,instance_); setFont(dashboardApps_,cardFont());
         dashboardWebsites_=makeControl(hwnd_,L"STATIC",L"WEBSITES\n0 blocked",SS_LEFT,0,0,400,90,0,instance_); setFont(dashboardWebsites_,cardFont());
@@ -339,6 +405,8 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         summary_=makeControl(hwnd_,L"STATIC",L"",SS_LEFT,0,0,700,54,0,instance_);
         statsSummary_=makeControl(hwnd_,L"STATIC",L"",SS_LEFT,0,0,700,390,0,instance_);
         settingsDescription_=makeControl(hwnd_,L"STATIC",L"Choose the appearance that is most comfortable. This preference is stored separately in your Windows user profile and does not change protection settings.",SS_LEFT,0,0,700,90,0,instance_);
+        healthSummary_=makeControl(hwnd_,L"STATIC",L"Select Refresh to inspect protection health.",SS_LEFT,0,0,760,430,0,instance_);
+        healthRefresh_=makeControl(hwnd_,L"BUTTON",L"Refresh health",BS_PUSHBUTTON,0,0,180,42,ID_REFRESH_HEALTH,instance_);
         status_=makeControl(hwnd_,L"STATIC",L"Ready.",SS_LEFT,260,0,900,30,0,instance_);
 
         addGroup(managementControls_,categoryLabel_); addGroup(managementControls_,category_);
@@ -353,6 +421,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         addGroup(protectionControls_,disableAdultDns_);
         addGroup(statisticsControls_,statsSummary_);
         addGroup(settingsControls_,settingsDescription_); addGroup(settingsControls_,themeToggle_); addGroup(settingsControls_,summary_);
+        addGroup(healthControls_,healthSummary_); addGroup(healthControls_,healthRefresh_);
 
         EnumChildWindows(hwnd_,[](HWND child,LPARAM font)->BOOL { setFont(child,reinterpret_cast<HFONT>(font)); SetWindowTheme(child,L"Explorer",nullptr); return TRUE; },reinterpret_cast<LPARAM>(uiFont()));
         setFont(pageTitle_,headingFont()); setFont(dashboardApps_,cardFont()); setFont(dashboardWebsites_,cardFont());
@@ -383,7 +452,9 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         case ID_NAV_LOGS: setPage(4); return 0;
         case ID_NAV_STATISTICS: setPage(5); return 0;
         case ID_NAV_SETTINGS: setPage(6); return 0;
+        case ID_NAV_HEALTH: setPage(7); return 0;
         case ID_THEME: toggleTheme(); return 0;
+        case ID_REFRESH_HEALTH: refreshHealth(); return 0;
         case ID_CATEGORY: if(HIWORD(wp)==CBN_SELCHANGE) refreshList(); return 0;
         case ID_PROFILE: if(HIWORD(wp)==CBN_SELCHANGE) saveProfile(); return 0;
         case ID_ADD: addEntry(); return 0;
@@ -420,7 +491,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     case WM_DRAWITEM: {
         auto* item=reinterpret_cast<DRAWITEMSTRUCT*>(lp);
         const int id=static_cast<int>(item->CtlID);
-        if(id>=ID_NAV_DASHBOARD && id<=ID_NAV_SETTINGS) {
+        if(id>=ID_NAV_DASHBOARD && id<=ID_NAV_HEALTH) {
             const int page=id-ID_NAV_DASHBOARD;
             const bool selected=page==currentPage_;
             const bool hot=(item->itemState&ODS_HOTLIGHT)!=0;
