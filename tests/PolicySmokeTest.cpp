@@ -25,6 +25,34 @@ bool hostsContains(const char* needle) {
     CloseHandle(file);
     return ok && bytes.find(needle)!=std::string::npos;
 }
+void printAppLockerDiagnostics() {
+    HANDLE token=nullptr;
+    if(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token)) {
+        DWORD bytes=0;GetTokenInformation(token,TokenUser,nullptr,0,&bytes);
+        std::vector<BYTE> buffer(bytes);
+        if(bytes && GetTokenInformation(token,TokenUser,buffer.data(),bytes,&bytes)) {
+            auto* user=reinterpret_cast<TOKEN_USER*>(buffer.data());
+            LPWSTR sid=nullptr;
+            if(ConvertSidToStringSidW(user->User.Sid,&sid) && sid) {
+                wprintf(L"Smoke test process SID: %ls\n",sid);
+                LocalFree(sid);
+            }
+        }
+        CloseHandle(token);
+    }
+    SC_HANDLE manager=OpenSCManagerW(nullptr,nullptr,SC_MANAGER_CONNECT);
+    if(!manager) return;
+    const wchar_t* names[]={L"AppIDSvc",L"appid",L"AppLockerFltr"};
+    for(const auto* name:names) {
+        SC_HANDLE service=OpenServiceW(manager,name,SERVICE_QUERY_STATUS);
+        if(!service) {wprintf(L"Service %ls: unavailable (%lu)\n",name,GetLastError());continue;}
+        SERVICE_STATUS_PROCESS status{};DWORD needed=0;
+        if(QueryServiceStatusEx(service,SC_STATUS_PROCESS_INFO,reinterpret_cast<BYTE*>(&status),sizeof(status),&needed))
+            wprintf(L"Service %ls state: %lu\n",name,status.dwCurrentState);
+        CloseServiceHandle(service);
+    }
+    CloseServiceHandle(manager);
+}
 bool launchProbe(const std::wstring& path,bool expectBlocked) {
     for(int attempt=0;attempt<10;++attempt) {
         STARTUPINFOW startup{};startup.cb=sizeof(startup);
@@ -40,6 +68,7 @@ bool launchProbe(const std::wstring& path,bool expectBlocked) {
             return false;
         }
         if(expectBlocked) {
+            wprintf(L"Probe process unexpectedly started (PID %lu); AppLocker did not block it.\\n",process.dwProcessId);
             TerminateProcess(process.hProcess,1);
             CloseHandle(process.hThread);CloseHandle(process.hProcess);
             Sleep(500);
@@ -84,6 +113,7 @@ int wmain(int argc,wchar_t** argv) {
     }
     if(!launchProbe(testPath,true)) {
         wprintf(L"AppLocker rule was written, but Windows did not block the probe process.\\n");
+        printAppLockerDiagnostics();
         store.removeEntry(L"applications",testPath);
         himaya::ExecutionPolicy::synchronize(store);
         DeleteFileW(testPath.c_str());return 29;
