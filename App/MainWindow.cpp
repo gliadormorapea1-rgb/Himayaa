@@ -235,6 +235,21 @@ void MainWindow::addEntry() {
     GetWindowTextW(input_, value, static_cast<int>(std::size(value)));
     if (!value[0]) { MessageBoxW(hwnd_, L"Enter an application path, website, or folder path first.", L"Himaya", MB_OK|MB_ICONINFORMATION); return; }
     const auto category = selectedCategory();
+    if(category==L"applications") {
+        wchar_t selected[MAX_PATH*4]{},self[MAX_PATH*4]{};
+        const DWORD selectedLength=GetFullPathNameW(value,static_cast<DWORD>(std::size(selected)),selected,nullptr);
+        const DWORD selfLength=GetModuleFileNameW(nullptr,self,static_cast<DWORD>(std::size(self)));
+        if(selectedLength && selectedLength<std::size(selected) && selfLength && selfLength<std::size(self)) {
+            std::wstring guard(self);
+            const auto slash=guard.find_last_of(L"\\/");
+            if(slash!=std::wstring::npos) guard.resize(slash+1);
+            guard+=L"HimayaGuard.exe";
+            if(_wcsicmp(selected,self)==0 || _wcsicmp(selected,guard.c_str())==0) {
+                MessageBoxW(hwnd_,L"Himaya cannot block its own interface or protection service. This prevents accidental loss of access to the recovery controls.",L"Protected application",MB_OK|MB_ICONWARNING);
+                return;
+            }
+        }
+    }
     const DWORD attributes=GetFileAttributesW(value);
     if(category==L"applications" &&
        (attributes==INVALID_FILE_ATTRIBUTES || (attributes&FILE_ATTRIBUTE_DIRECTORY))) {
