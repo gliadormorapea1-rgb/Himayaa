@@ -8,7 +8,7 @@
 
 namespace himaya {
 namespace {
-// Keep each embedded PowerShell literal below MSVC\x27s per-literal size limit.
+// Split the embedded PowerShell into small literals for MSVC compatibility.
 constexpr wchar_t kScriptPart1[] = LR"PS(
 param([ValidateSet('Enable','Sync','Restore')][string]$Mode)
 $ErrorActionPreference = 'Stop'
@@ -52,7 +52,8 @@ function Get-AdapterForIndex {
     Where-Object { [int]$_.InterfaceIndex -eq $Index } |
     Select-Object -First 1
 }
-function Backup-Settings {
+)PS";
+constexpr wchar_t kScriptPart2[] = LR"PS(function Backup-Settings {
   $b = $null
   if (Test-Path -LiteralPath $backupFile) {
     $b = Get-Content -LiteralPath $backupFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
@@ -193,7 +194,7 @@ function Backup-Settings {
 }
 
 )PS";
-constexpr wchar_t kScriptPart2[] = LR"PS(function Apply-Protection {
+constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
   Backup-Settings
   $configuredIPv4 = 0
   $configuredIPv6 = 0
@@ -269,7 +270,8 @@ constexpr wchar_t kScriptPart2[] = LR"PS(function Apply-Protection {
   Write-Log "DNS protection applied. Verified IPv4 adapters: $configuredIPv4; verified IPv6 adapters: $configuredIPv6."
 }
 
-function Restore-Protection {
+)PS";
+constexpr wchar_t kScriptPart4[] = LR"PS(function Restore-Protection {
   if (-not (Test-Path -LiteralPath $backupFile)) {
     Write-Log 'No DNS backup exists; removing only Himaya-owned firewall rules.'
   } else {
@@ -427,6 +429,8 @@ try {
 std::wstring buildScript(){
   std::wstring result(kScriptPart1);
   result += kScriptPart2;
+  result += kScriptPart3;
+  result += kScriptPart4;
   return result;
 }
 std::wstring rootPath(){
