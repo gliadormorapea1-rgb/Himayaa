@@ -222,7 +222,8 @@ bool restoreAppLockerFltr(std::wstring& error) {
     RegDeleteTreeW(HKEY_LOCAL_MACHINE,kAppLockerFltrBackupKey);
     return true;
 }
-const wchar_t* scriptText=LR"PS(
+const wchar_t* scriptTextParts[]={
+LR"PS(
 param([string]$RulesFile,[string]$PolicyFile,[string]$ErrorFile,[switch]$RestoreOnly)
 $ErrorActionPreference = 'Stop'
 try {
@@ -374,7 +375,8 @@ try {
     ($_ | Out-String) | Set-Content -LiteralPath $ErrorFile -Encoding UTF8
     exit 1
 }
-)PS";
+)PS"
+};
 bool runPolicyScript(const std::vector<AppLockerRule>& rules,
                      const std::vector<std::wstring>& sids,
                      const std::wstring& directory,bool restoreOnly,
@@ -393,6 +395,8 @@ bool runPolicyScript(const std::vector<AppLockerRule>& rules,
             lines+=sid+L"|"+rule.path+L"\r\n";
         }
     }
+    std::wstring scriptText;
+    for(const auto* part:scriptTextParts) scriptText+=part;
     if(!writeUtf16(script,scriptText)||!writeUtf16(input,lines)) {
         error=L"Could not write the temporary AppLocker policy files.";
         return false;
