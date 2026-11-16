@@ -41,6 +41,11 @@ var
   ResultCode: Integer;
   Params: String;
 begin
+  if CurStep = ssInstall then
+  begin
+    Exec(ExpandConstant('{sys}\\sc.exe'), 'stop HimayaGuard', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(3000);
+  end;
   if CurStep = ssPostInstall then
   begin
     Params := 'create HimayaGuard binPath= "' + ExpandConstant('{app}\HimayaGuard.exe') + '" start= auto DisplayName= "Himaya Protection Service"';
