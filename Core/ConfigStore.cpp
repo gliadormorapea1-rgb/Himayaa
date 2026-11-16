@@ -130,7 +130,7 @@ std::vector<Entry> ConfigStore::load(const std::wstring& category) const {
     std::vector<Entry> result;
     if (!db_) return result;
     sqlite3_stmt* statement = nullptr;
-    if (sqlite3_prepare_v2(db_, "SELECT value,lock_mode,profile FROM entries WHERE category=?1 ORDER BY id DESC", -1, &statement, nullptr) != SQLITE_OK) return result;
+    if (sqlite3_prepare_v2(db_, "SELECT value,lock_mode,profile FROM entries WHERE category=?1 AND (expires_at IS NULL OR expires_at > unixepoch()) ORDER BY id DESC", -1, &statement, nullptr) != SQLITE_OK) return result;
     bindText(statement, 1, category);
     while (sqlite3_step(statement) == SQLITE_ROW) {
         result.push_back({fromUtf8(sqlite3_column_text(statement, 0)),
