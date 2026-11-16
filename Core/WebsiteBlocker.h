@@ -14,7 +14,7 @@ struct WebsiteBlockResult {
 
 class WebsiteBlocker {
 public:
-    // Applies the community adult-domain feed plus user-managed website rules.
+    // Applies only user-managed website rules. Adult-content filtering is handled separately.
     // The caller must run elevated. Existing non-Himaya hosts-file content is preserved.
     static WebsiteBlockResult apply(const std::vector<std::wstring>& userDomains,
                                     bool includeAdultFeed);
