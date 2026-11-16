@@ -53,6 +53,7 @@ bool launchProbe(const std::wstring& path,bool expectBlocked) {
     return false;
 }
 
+}
 int wmain(int argc,wchar_t** argv) {
     if(argc==2 && _wcsicmp(argv[1],L"--probe")==0) return 42;
     wchar_t temp[MAX_PATH]{};
