@@ -2,6 +2,7 @@
 #include "../Core/ExecutionPolicy.h"
 #include "../Core/WebsiteBlocker.h"
 #include <windows.h>
+#include <sddl.h>
 #include <string>
 #include <vector>
 
