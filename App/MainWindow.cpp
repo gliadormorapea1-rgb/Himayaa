@@ -113,14 +113,14 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         applySites_ = makeControl(hwnd_, L"BUTTON", L"Apply custom website rules (Hosts)", BS_PUSHBUTTON, 30,640,300,38,ID_APPLY_SITES,instance_);
         restoreSites_ = makeControl(hwnd_, L"BUTTON", L"Restore custom website rules", BS_PUSHBUTTON, 345,640,270,38,ID_RESTORE_SITES,instance_);
         restoreOriginalHosts_ = makeControl(hwnd_, L"BUTTON", L"Restore original hosts file", BS_PUSHBUTTON, 630,640,360,38,ID_RESTORE_ORIGINAL_HOSTS,instance_);
-        makeControl(hwnd_, L"STATIC", L"Adult-content protection — CleanBrowsing Family DNS (adult sites, mixed content, malware and SafeSearch)", SS_LEFT, 30,690,960,26,0,instance_);
+        makeControl(hwnd_, L"STATIC", L"Adult-content + short-video protection — DNS filtering, Reels/Shorts/Spotlight blocking and selected platform blocking", SS_LEFT, 30,690,960,26,0,instance_);
         enableAdultDns_ = makeControl(hwnd_, L"BUTTON", L"Enable adult DNS protection", BS_PUSHBUTTON, 30,720,300,38,ID_ENABLE_ADULT_DNS,instance_);
         disableAdultDns_ = makeControl(hwnd_, L"BUTTON", L"Disable adult DNS protection", BS_PUSHBUTTON, 345,720,300,38,ID_DISABLE_ADULT_DNS,instance_);
         const bool dnsEnabled = store_.getSetting(L"adult_dns_enabled",L"0")==L"1";
         EnableWindow(enableAdultDns_, !dnsEnabled);
         EnableWindow(disableAdultDns_, dnsEnabled);
         summary_ = makeControl(hwnd_, L"STATIC", L"Database: Loading...", SS_LEFT, 30,770,960,26,0,instance_);
-        status_ = makeControl(hwnd_, L"STATIC", L"Custom websites use Hosts. Adult filtering uses DNS, browser policies, firewall rules and HimayaGuard monitoring.", SS_LEFT, 30,805,960,42,0,instance_);
+        status_ = makeControl(hwnd_, L"STATIC", L"Custom websites use Hosts. Adult and short-video rules use browser policies, DNS, firewall rules and HimayaGuard monitoring.", SS_LEFT, 30,805,960,42,0,instance_);
         EnumChildWindows(hwnd_, [](HWND child, LPARAM font) -> BOOL {
             SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
             SetWindowTheme(child,L"DarkMode_Explorer",nullptr);
@@ -329,8 +329,8 @@ void MainWindow::applyWebsites() {
 void MainWindow::setAdultDnsProtection(bool enabled) {
     const int answer = MessageBoxW(hwnd_,
         enabled
-          ? L"Himaya will configure CleanBrowsing Family DNS on available IPv4/IPv6 adapters, enforce Secure DNS policies for Edge, Chrome and Firefox, block DNS-over-TLS and common public DNS resolvers, and monitor settings through HimayaGuard. Original DNS and browser policy settings will be backed up. Continue?"
-          : L"Himaya will restore the DNS and browser policy settings saved before protection was enabled, and remove Himaya DNS firewall rules. Continue?",
+          ? L"Himaya will enable adult-content DNS filtering and block YouTube Shorts, Instagram Reels, Facebook Reels and Snapchat Spotlight. TikTok, Likee and Kwai will be blocked entirely because their short-video feeds cannot be reliably separated from the rest of each site. The browser rules are applied to Edge, Chrome, Brave and Firefox and re-synchronized by HimayaGuard. Original DNS and browser policies will be backed up. Continue?"
+          : L"Himaya will restore the DNS and browser policy settings saved before protection was enabled, including the social-video URL rules, and remove Himaya DNS firewall rules. Continue?",
         enabled ? L"Enable adult-content DNS protection" : L"Restore DNS settings",
         MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2);
     if(answer!=IDYES) return;
