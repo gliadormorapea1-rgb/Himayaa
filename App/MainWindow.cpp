@@ -13,7 +13,7 @@
 namespace {
 constexpr wchar_t kClassName[] = L"HimayaMainWindow";
 enum : int { ID_CATEGORY=1001, ID_LIST=1002, ID_INPUT=1003, ID_ADD=1004, ID_REMOVE=1005,
-             ID_REFRESH=1006, ID_PROFILE=1007, ID_DURATION=1008, ID_APPLY_SITES=1009, ID_RESTORE_SITES=1010, ID_BROWSE=1011 };
+             ID_REFRESH=1006, ID_PROFILE=1007, ID_DURATION=1008, ID_APPLY_SITES=1009, ID_RESTORE_SITES=1010, ID_BROWSE=1011, ID_REPORT=1012 };
 HWND makeControl(HWND parent, const wchar_t* cls, const wchar_t* text, DWORD style,
                  int x,int y,int w,int h,int id,HINSTANCE inst) {
     return CreateWindowExW(0, cls, text, WS_CHILD|WS_VISIBLE|style, x,y,w,h,parent,
@@ -70,9 +70,9 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE: {
         auto title = makeControl(hwnd_, L"STATIC", L"HIMAYA  |  الحماية من الإدمان الرقمي", SS_LEFT, 28,18,960,42,0,instance_);
         setFont(title);
-        auto subtitle = makeControl(hwnd_, L"STATIC", L"إدارة القوائم والسياسات محليًا — الإصدار 0.4.0", SS_LEFT, 30,60,950,28,0,instance_);
+        auto subtitle = makeControl(hwnd_, L"STATIC", L"إدارة القوائم والسياسات محليًا — الإصدار 0.5.0", SS_LEFT, 30,60,950,28,0,instance_);
         setFont(subtitle);
-        settings_ = makeControl(hwnd_, L"STATIC", L"السياسات المعتمدة: حظر الإباحية شامل  |  فك القيود بموافقة + مهلة  |  إدارة مشتركة", SS_LEFT, 30,98,960,28,0,instance_);
+        settings_ = makeControl(hwnd_, L"STATIC", L"حماية التطبيقات والمواقع والمجلدات — إدارة محلية قابلة للاستعادة", SS_LEFT, 30,98,960,28,0,instance_);
         setFont(settings_);
 
         makeControl(hwnd_, L"STATIC", L"نوع القائمة", SS_LEFT, 30,145,120,24,0,instance_);
@@ -108,6 +108,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         list_ = makeControl(hwnd_, WC_LISTBOXW, L"", WS_BORDER|LBS_NOTIFY|WS_VSCROLL, 30,275,960,300,ID_LIST,instance_);
         makeControl(hwnd_, L"BUTTON", L"حذف المحدد من القائمة", BS_PUSHBUTTON, 30,590,220,36,ID_REMOVE,instance_);
         makeControl(hwnd_, L"BUTTON", L"تحديث القائمة", BS_PUSHBUTTON, 265,590,140,36,ID_REFRESH,instance_);
+        makeControl(hwnd_, L"BUTTON", L"تصدير سجل الحماية CSV", BS_PUSHBUTTON, 420,590,220,36,ID_REPORT,instance_);
         applySites_ = makeControl(hwnd_, L"BUTTON", L"تطبيق حظر المواقع الإباحية والمخصصة", BS_PUSHBUTTON, 30,640,360,38,ID_APPLY_SITES,instance_);
         restoreSites_ = makeControl(hwnd_, L"BUTTON", L"استعادة إعدادات المواقع", BS_PUSHBUTTON, 405,640,260,38,ID_RESTORE_SITES,instance_);
         summary_ = makeControl(hwnd_, L"STATIC", L"قاعدة البيانات: جاري التحميل...", SS_LEFT, 30,690,960,26,0,instance_);
@@ -132,6 +133,7 @@ LRESULT MainWindow::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         case ID_BROWSE: browseEntry(); return 0;
         case ID_REMOVE: removeEntry(); return 0;
         case ID_REFRESH: refreshList(); return 0;
+        case ID_REPORT: exportReport(); return 0;
         case ID_APPLY_SITES: applyWebsites(); return 0;
         case ID_RESTORE_SITES: restoreWebsites(); return 0;
         }
@@ -285,6 +287,30 @@ void MainWindow::applyWebsites() {
     if(result.success && result.blockedDomains) message+=L"\nعدد النطاقات: "+std::to_wstring(result.blockedDomains);
     setStatus(message);
     MessageBoxW(hwnd_,message.c_str(),L"Himaya Security",MB_OK|(result.success?MB_ICONINFORMATION:MB_ICONERROR));
+}
+
+
+void MainWindow::exportReport() {
+    wchar_t path[MAX_PATH] = L"Himaya-Activity-Report.csv";
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize = sizeof(dialog);
+    dialog.hwndOwner = hwnd_;
+    dialog.lpstrFilter = L"CSV files (*.csv)\0*.csv\0All files (*.*)\0*.*\0\0";
+    dialog.lpstrFile = path;
+    dialog.nMaxFile = static_cast<DWORD>(std::size(path));
+    dialog.lpstrDefExt = L"csv";
+    dialog.lpstrTitle = L"تصدير سجل نشاط الحماية";
+    dialog.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
+    if (!GetSaveFileNameW(&dialog)) return;
+    if (!store_.exportEventsCsv(path)) {
+        MessageBoxW(hwnd_, L"تعذر تصدير سجل الحماية. تحقق من صلاحية الكتابة والمساحة المتاحة.",
+                    L"Himaya Security", MB_OK | MB_ICONERROR);
+        return;
+    }
+    store_.logEvent(L"report_exported", path);
+    setStatus(L"تم تصدير آخر 5000 حدث إلى ملف CSV.");
+    MessageBoxW(hwnd_, L"تم تصدير سجل الحماية بنجاح.", L"Himaya Security",
+                MB_OK | MB_ICONINFORMATION);
 }
 
 void MainWindow::restoreWebsites() {
