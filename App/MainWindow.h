@@ -19,6 +19,7 @@ private:
     void saveProfile();
     void applyWebsites();
     void restoreWebsites();
+    void exportReport();
     std::wstring selectedCategory() const;
     std::wstring selectedDuration() const;
     std::wstring selectedProfile() const;
