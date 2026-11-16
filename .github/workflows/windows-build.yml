@@ -43,7 +43,7 @@ jobs:
           Write-Host "Canonical source validated at $sourceDir"
 
       - name: Inspect canonical source for implementation work
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: always()
         shell: pwsh
         run: |
           $root = "source/Himaya-0.3.1"
