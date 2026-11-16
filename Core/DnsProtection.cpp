@@ -299,6 +299,7 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Apply-Protection {
     '*://*.likee.video/*',
     '*://*.kwai.com/*'
   )
+  New-Item -Path (Join-Path $firefoxRoot 'WebsiteFilter') -Force -ErrorAction Stop | Out-Null
   Add-PolicyListValues (Join-Path $firefoxRoot 'WebsiteFilter\Block') $firefoxSocialBlocks
   Write-Log 'Full-domain social platform blocks were applied to Edge, Chrome, Brave and Firefox to prevent single-page-app route bypasses.'
 
