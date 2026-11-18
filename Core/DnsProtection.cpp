@@ -375,7 +375,8 @@ function Apply-Protection {
     }
 
     $componentId = if ($family -eq 'IPv4') { 'ms_tcpip' } else { 'ms_tcpip6' }
-    $binding = Get-NetAdapterBinding -Name $nic.Name -ComponentID $componentId -ErrorAction SilentlyContinue |
+)PS";
+constexpr wchar_t kScriptPart5[] = LR"PS(    $binding = Get-NetAdapterBinding -Name $nic.Name -ComponentID $componentId -ErrorAction SilentlyContinue |
       Select-Object -First 1
     if ($null -eq $binding -or -not $binding.Enabled) {
       Write-Log "Skipping $family on $($nic.Name): protocol binding '$componentId' is not enabled."
@@ -447,7 +448,7 @@ function Apply-Protection {
 }
 
 )PS";
-constexpr wchar_t kScriptPart5[] = LR"PS(function Restore-Protection {
+constexpr wchar_t kScriptPart6[] = LR"PS(function Restore-Protection {
   if (-not (Test-Path -LiteralPath $backupFile)) {
     Write-Log 'No DNS backup exists; removing only Himaya-owned firewall rules.'
   } else {
@@ -614,6 +615,7 @@ std::wstring buildScript(){
   result += kScriptPart3;
   result += kScriptPart4;
   result += kScriptPart5;
+  result += kScriptPart6;
   return result;
 }
 std::wstring rootPath(){
