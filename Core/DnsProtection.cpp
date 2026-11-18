@@ -260,11 +260,108 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Remove-LegacySocialBlocks {
   Write-Log "Removed $removed legacy full-domain social-platform URL block entries; unrelated browser policy values were preserved."
 }
 
+)PS";
+constexpr wchar_t kScriptPart4[] = LR"PS(function Test-DnsResolverGroup {
+  param([string[]]$Servers, [string]$Family, [switch]$Required)
+  $responsive = @()
+  foreach ($server in $Servers) {
+    try {
+      $answer = @(Resolve-DnsName -Name 'example.com' -Server $server -Type A -DnsOnly -ErrorAction Stop)
+      $aRecords = @($answer | Where-Object {
+        [string]$_.Type -eq 'A' -and -not [string]::IsNullOrWhiteSpace([string]$_.IPAddress)
+      })
+      if ($aRecords.Count -gt 0) { $responsive += $server }
+    } catch {
+      Write-Log "DNS health probe failed for $Family resolver ${server}: $($_.Exception.Message)"
+    }
+  }
+  if ($responsive.Count -eq 0) {
+    $message = "No configured $Family resolver returned an A record for example.com."
+    if ($Required) { throw $message }
+    Write-Log $message
+    return $false
+  }
+  Write-Log "DNS resolver health check passed for $Family. Responsive servers: $($responsive -join ',')."
+  return $true
+}
+
+function Test-HimayaFirewallRule {
+  param(
+    [string]$Name,
+    [string]$Protocol,
+    [int]$RemotePort,
+    [string[]]$RemoteAddresses = @()
+  )
+  $rules = @(Get-NetFirewallRule -DisplayName $Name -ErrorAction SilentlyContinue)
+  if ($rules.Count -ne 1) { return $false }
+  try {
+    $rule = $rules[0]
+    $portFilter = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
+    $addressFilter = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
+    $expectedAddresses = if ($RemoteAddresses.Count -gt 0) {
+      @($RemoteAddresses | Sort-Object) -join ','
+    } else { 'Any' }
+    $actualAddresses = @($addressFilter.RemoteAddress | ForEach-Object { [string]$_ } | Sort-Object) -join ','
+    return (
+      [string]$rule.Enabled -eq 'True' -and
+      [string]$rule.Direction -eq 'Outbound' -and
+      [string]$rule.Action -eq 'Block' -and
+      [string]$rule.Profile -eq 'Any' -and
+      [string]$rule.Group -eq 'Himaya Adult DNS Protection' -and
+      [string]$portFilter.Protocol -eq $Protocol -and
+      (@($portFilter.RemotePort) -join ',') -eq [string]$RemotePort -and
+      $actualAddresses -eq $expectedAddresses
+    )
+  } catch {
+    Write-Log "Could not inspect firewall rule '$Name': $($_.Exception.Message)"
+    return $false
+  }
+}
+
+function Ensure-HimayaFirewallRule {
+  param(
+    [string]$Name,
+    [string]$Protocol,
+    [int]$RemotePort,
+    [string[]]$RemoteAddresses = @()
+  )
+  if (Test-HimayaFirewallRule -Name $Name -Protocol $Protocol -RemotePort $RemotePort -RemoteAddresses $RemoteAddresses) {
+    Write-Log "Verified firewall rule '$Name'."
+    return
+  }
+
+  $existing = @(Get-NetFirewallRule -DisplayName $Name -ErrorAction SilentlyContinue)
+  if ($existing.Count -gt 0) {
+    $existing | Remove-NetFirewallRule -ErrorAction Stop
+    Write-Log "Recreated stale or misconfigured Himaya firewall rule '$Name'."
+  }
+
+  $ruleArguments = @{
+    DisplayName = $Name
+    Group = 'Himaya Adult DNS Protection'
+    Direction = 'Outbound'
+    Action = 'Block'
+    Enabled = 'True'
+    Protocol = $Protocol
+    RemotePort = $RemotePort
+    Profile = 'Any'
+    ErrorAction = 'Stop'
+  }
+  if ($RemoteAddresses.Count -gt 0) { $ruleArguments.RemoteAddress = $RemoteAddresses }
+  New-NetFirewallRule @ruleArguments | Out-Null
+
+  if (-not (Test-HimayaFirewallRule -Name $Name -Protocol $Protocol -RemotePort $RemotePort -RemoteAddresses $RemoteAddresses)) {
+    throw "Firewall rule '$Name' could not be verified after creation."
+  }
+  Write-Log "Created and verified firewall rule '$Name'."
+}
+
 function Apply-Protection {
   Backup-Settings
   Remove-LegacySocialBlocks
   $configuredIPv4 = 0
   $configuredIPv6 = 0
+  $configuredIPv6Indexes = @()
   $activeIPv4Failures = @()
   foreach ($entry in (Get-DnsClientServerAddress -ErrorAction Stop)) {
     if ($entry.InterfaceAlias -match 'Loopback') { continue }
@@ -278,7 +375,8 @@ function Apply-Protection {
     }
 
     $componentId = if ($family -eq 'IPv4') { 'ms_tcpip' } else { 'ms_tcpip6' }
-    $binding = Get-NetAdapterBinding -Name $nic.Name -ComponentID $componentId -ErrorAction SilentlyContinue |
+)PS";
+constexpr wchar_t kScriptPart5[] = LR"PS(    $binding = Get-NetAdapterBinding -Name $nic.Name -ComponentID $componentId -ErrorAction SilentlyContinue |
       Select-Object -First 1
     if ($null -eq $binding -or -not $binding.Enabled) {
       Write-Log "Skipping $family on $($nic.Name): protocol binding '$componentId' is not enabled."
@@ -294,7 +392,7 @@ function Apply-Protection {
       if ((@($verified.ServerAddresses) -join ',') -ne ($servers -join ',')) {
         throw "DNS verification did not match the requested $family servers."
       }
-      if ($family -eq 'IPv4') { $configuredIPv4++ } else { $configuredIPv6++ }
+      if ($family -eq 'IPv4') { $configuredIPv4++ } else { $configuredIPv6++; $configuredIPv6Indexes += [int]$entry.InterfaceIndex }
       Write-Log "Configured and verified $family DNS on $($nic.Name) (index $($entry.InterfaceIndex))."
     } catch {
       $detail = "Interface $($nic.Name) (index $($entry.InterfaceIndex), $family): $($_.Exception.Message)"
@@ -308,6 +406,21 @@ function Apply-Protection {
   }
   if ($activeIPv4Failures.Count -gt 0) {
     throw "DNS protection is incomplete because one or more active IPv4 adapters failed: $($activeIPv4Failures -join '; ')"
+  }
+
+  # Verify that the selected filtering provider can answer real DNS queries.
+  # A successful interface-setting command alone does not prove the resolver is reachable.
+  Test-DnsResolverGroup -Servers $dns4 -Family 'IPv4' -Required
+
+  if ($configuredIPv6Indexes.Count -gt 0) {
+    $ipv6DefaultRoute = Get-NetRoute -AddressFamily IPv6 -DestinationPrefix '::/0' -ErrorAction SilentlyContinue |
+      Where-Object { $configuredIPv6Indexes -contains [int]$_.InterfaceIndex } |
+      Select-Object -First 1
+    if ($null -ne $ipv6DefaultRoute) {
+      Test-DnsResolverGroup -Servers $dns6 -Family 'IPv6' -Required
+    } else {
+      Write-Log 'IPv6 DNS addresses were configured, but no active IPv6 default route exists; IPv6 resolver reachability probe was skipped.'
+    }
   }
 
   $edge = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
@@ -327,21 +440,15 @@ function Apply-Protection {
   # Full-site social-platform URL blocks were removed. Shorts/Reels route blocking
   # is handled exclusively by the Himaya browser extension.
 
-  if (-not (Get-NetFirewallRule -DisplayName $firewallNames[0] -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName $firewallNames[0] -Direction Outbound -Action Block -Protocol TCP -RemotePort 853 -Profile Any -ErrorAction Stop | Out-Null
-  }
   $known = @('1.1.1.1','1.0.0.1','8.8.8.8','8.8.4.4','9.9.9.9','149.112.112.112','208.67.222.222','208.67.220.220','94.140.14.14','94.140.15.15','2606:4700:4700::1111','2001:4860:4860::8888','2620:fe::fe')
-  if (-not (Get-NetFirewallRule -DisplayName $firewallNames[1] -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName $firewallNames[1] -Direction Outbound -Action Block -Protocol UDP -RemotePort 53 -RemoteAddress $known -Profile Any -ErrorAction Stop | Out-Null
-  }
-  if (-not (Get-NetFirewallRule -DisplayName $firewallNames[2] -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName $firewallNames[2] -Direction Outbound -Action Block -Protocol TCP -RemotePort 53 -RemoteAddress $known -Profile Any -ErrorAction Stop | Out-Null
-  }
+  Ensure-HimayaFirewallRule -Name $firewallNames[0] -Protocol TCP -RemotePort 853
+  Ensure-HimayaFirewallRule -Name $firewallNames[1] -Protocol UDP -RemotePort 53 -RemoteAddresses $known
+  Ensure-HimayaFirewallRule -Name $firewallNames[2] -Protocol TCP -RemotePort 53 -RemoteAddresses $known
   Write-Log "DNS protection applied. Verified IPv4 adapters: $configuredIPv4; verified IPv6 adapters: $configuredIPv6."
 }
 
 )PS";
-constexpr wchar_t kScriptPart4[] = LR"PS(function Restore-Protection {
+constexpr wchar_t kScriptPart6[] = LR"PS(function Restore-Protection {
   if (-not (Test-Path -LiteralPath $backupFile)) {
     Write-Log 'No DNS backup exists; removing only Himaya-owned firewall rules.'
   } else {
@@ -395,7 +502,11 @@ constexpr wchar_t kScriptPart4[] = LR"PS(function Restore-Protection {
     foreach ($item in @($resolvedDns | Where-Object { -not $_.NeedsReset })) {
       try {
         Set-DnsClientServerAddress -InterfaceIndex ([int]$item.Index) -ServerAddresses @($item.Entry.Servers) -ErrorAction Stop
-        Write-Log "Restored static $($item.Family) DNS on $($item.Adapter.Name) (index $($item.Index))."
+        $verifiedRestore = Get-DnsClientServerAddress -InterfaceIndex ([int]$item.Index) -AddressFamily $item.Family -ErrorAction Stop
+        if ((@($verifiedRestore.ServerAddresses) -join ',') -ne (@($item.Entry.Servers) -join ',')) {
+          throw "Restored $($item.Family) DNS values did not match the saved backup."
+        }
+        Write-Log "Restored and verified static $($item.Family) DNS on $($item.Adapter.Name) (index $($item.Index))."
       } catch {
         $restoreErrors += "DNS interface $($item.Adapter.Name) ($($item.Family)): $($_.Exception.Message)"
       }
@@ -503,6 +614,8 @@ std::wstring buildScript(){
   result += kScriptPart2;
   result += kScriptPart3;
   result += kScriptPart4;
+  result += kScriptPart5;
+  result += kScriptPart6;
   return result;
 }
 std::wstring rootPath(){

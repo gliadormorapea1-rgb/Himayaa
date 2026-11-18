@@ -36,7 +36,7 @@ add_library(HimayaCore STATIC
   Core/AppLockerPolicy.cpp
   "${SQLITE_SOURCE_DIR}/sqlite3.c")
 target_include_directories(HimayaCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${SQLITE_SOURCE_DIR}")
-target_compile_definitions(HimayaCore PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION)
+target_compile_definitions(HimayaCore PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000 SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION)
 target_link_libraries(HimayaCore PUBLIC shell32 shlwapi ole32 winhttp normaliz advapi32)
 if(MSVC)
   target_compile_options(HimayaCore PRIVATE /W4 /permissive- /utf-8)
@@ -44,7 +44,8 @@ if(MSVC)
 endif()
 
 add_executable(Himaya WIN32 App/main.cpp App/MainWindow.cpp)
-target_link_libraries(Himaya PRIVATE HimayaCore comctl32 comdlg32 dwmapi uxtheme)
+target_compile_definitions(Himaya PRIVATE WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
+target_link_libraries(Himaya PRIVATE HimayaCore comctl32 comdlg32 dwmapi uxtheme iphlpapi ws2_32)
 if(MSVC)
   target_link_options(Himaya PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
 endif()

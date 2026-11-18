@@ -47,6 +47,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Browser extension content script syntax check failed." }
           node --check "BrowserExtension/popup.js"
           if ($LASTEXITCODE -ne 0) { throw "Browser extension popup script syntax check failed." }
+          $mainWindow = Get-Content "App/MainWindow.cpp" -Raw
+          foreach ($required in @("GetAdaptersAddresses", "LIVE NETWORK DNS DIAGNOSTICS", "Other DNS resolver")) {
+            if ($mainWindow.IndexOf($required) -lt 0) { throw "Live DNS diagnostics are missing: $required" }
+          }
+          if ($mainWindow.IndexOf("DnsQuery_W") -ge 0) { throw "The health-page DNS diagnostics must not block the UI on network timeouts." }
+          Write-Host "Non-blocking live DNS adapter diagnostics are present."
 
       - name: Validate embedded DNS PowerShell syntax
         shell: pwsh
@@ -57,7 +63,7 @@ jobs:
             'LR"PS\((?<script>.*?)\)PS";',
             [System.Text.RegularExpressions.RegexOptions]::Singleline
           )
-          if ($matches.Count -ne 4) { throw "Expected exactly four embedded DNS PowerShell script parts." }
+          if ($matches.Count -ne 6) { throw "Expected exactly six embedded DNS PowerShell script parts." }
           $scriptText = ($matches | ForEach-Object { $_.Groups["script"].Value }) -join ""
           $tokens = $null
           $parseErrors = $null
@@ -86,7 +92,19 @@ jobs:
           if ($scriptText.IndexOf("Automatic rollback skipped because the backup is legacy") -lt 0) {
             throw "Rollback must preserve an unvalidated legacy backup."
           }
-          Write-Host "Embedded DNS PowerShell parsed successfully; static safety checks passed; no live DNS settings were changed."
+          if ($scriptText.IndexOf("function Test-DnsResolverGroup") -lt 0 -or
+              $scriptText.IndexOf('Resolve-DnsName -Name ''example.com'' -Server $server -Type A -DnsOnly') -lt 0) {
+            throw "Live DNS resolver health verification is missing."
+          }
+          if ($scriptText.IndexOf("function Ensure-HimayaFirewallRule") -lt 0 -or
+              $scriptText.IndexOf("Get-NetFirewallPortFilter -AssociatedNetFirewallRule") -lt 0 -or
+              $scriptText.IndexOf("Get-NetFirewallAddressFilter -AssociatedNetFirewallRule") -lt 0) {
+            throw "Firewall rule configuration verification is missing."
+          }
+          if ($scriptText.IndexOf("Restored and verified static") -lt 0) {
+            throw "DNS restore read-back verification is missing."
+          }
+          Write-Host "Embedded DNS PowerShell parsed successfully; DNS health, firewall verification and restore checks are present; no live DNS settings were changed."
 
       - name: Configure x64 Release
         run: cmake -S . -B build -A x64
