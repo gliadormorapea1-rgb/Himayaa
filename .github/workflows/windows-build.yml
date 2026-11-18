@@ -47,6 +47,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Browser extension content script syntax check failed." }
           node --check "BrowserExtension/popup.js"
           if ($LASTEXITCODE -ne 0) { throw "Browser extension popup script syntax check failed." }
+          $mainWindow = Get-Content "App/MainWindow.cpp" -Raw
+          foreach ($required in @("GetAdaptersAddresses", "DnsQuery_W", "LIVE NETWORK DNS DIAGNOSTICS")) {
+            if ($mainWindow.IndexOf($required) -lt 0) { throw "Live DNS diagnostics are missing: $required" }
+          }
+          Write-Host "Live DNS adapter enumeration and resolver probe are present."
 
       - name: Validate embedded DNS PowerShell syntax
         shell: pwsh
