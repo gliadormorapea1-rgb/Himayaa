@@ -260,7 +260,8 @@ constexpr wchar_t kScriptPart3[] = LR"PS(function Remove-LegacySocialBlocks {
   Write-Log "Removed $removed legacy full-domain social-platform URL block entries; unrelated browser policy values were preserved."
 }
 
-function Test-DnsResolverGroup {
+)PS";
+constexpr wchar_t kScriptPart4[] = LR"PS(function Test-DnsResolverGroup {
   param([string[]]$Servers, [string]$Family, [switch]$Required)
   $responsive = @()
   foreach ($server in $Servers) {
@@ -446,7 +447,7 @@ function Apply-Protection {
 }
 
 )PS";
-constexpr wchar_t kScriptPart4[] = LR"PS(function Restore-Protection {
+constexpr wchar_t kScriptPart5[] = LR"PS(function Restore-Protection {
   if (-not (Test-Path -LiteralPath $backupFile)) {
     Write-Log 'No DNS backup exists; removing only Himaya-owned firewall rules.'
   } else {
@@ -612,6 +613,7 @@ std::wstring buildScript(){
   result += kScriptPart2;
   result += kScriptPart3;
   result += kScriptPart4;
+  result += kScriptPart5;
   return result;
 }
 std::wstring rootPath(){
