@@ -11,7 +11,6 @@
 #include <shlwapi.h>
 #include <iphlpapi.h>
 #include <ws2tcpip.h>
-#include <windns.h>
 #include <string>
 #include <algorithm>
 #include <iterator>
@@ -162,14 +161,7 @@ std::wstring liveDnsDiagnostics() {
         ? L"At least one CleanBrowsing Adult resolver is present."
         : L"No configured CleanBrowsing Adult resolver was found on active adapters.";
 
-    DNS_RECORD* records = nullptr;
-    const DNS_STATUS queryStatus = DnsQuery_W(L"example.com", DNS_TYPE_A,
-        DNS_QUERY_BYPASS_CACHE, nullptr, &records, nullptr);
-    if (records) DnsRecordListFree(records, DnsFreeRecordList);
-    report += L"\nDNS lookup probe (example.com): ";
-    report += queryStatus == ERROR_SUCCESS
-        ? L"successful using the Windows resolver configuration."
-        : L"failed (DNS status " + std::to_wstring(queryStatus) + L").";
+    report += L"\nDNS lookup is not run here; this page only reads adapter configuration and does not delay the interface with network timeouts.";
     return report;
 }
 
