@@ -523,7 +523,7 @@ void MainWindow::refreshHealth() {
         L"\n\nLATEST RECORDED EVENT\n";
     if(!events.empty()) report+=events.front().timestamp+L"  |  "+events.front().type+L"  |  "+events.front().details;
     else report+=L"No event available.";
-    report+=L"\n\nNote: adapter DNS and the lookup probe do not prove category enforcement or protection against every browser DoH/VPN bypass.";
+    report+=L"\n\nNote: adapter DNS configuration does not prove category enforcement or protection against every browser DoH/VPN bypass.";
     SetWindowTextW(healthSummary_,report.c_str());
     setStatus(L"Protection health refreshed. Service status was queried directly from Windows.");
 }
