@@ -9,6 +9,9 @@
 #include <dwmapi.h>
 #include <uxtheme.h>
 #include <shlwapi.h>
+#include <iphlpapi.h>
+#include <ws2tcpip.h>
+#include <windns.h>
 #include <string>
 #include <algorithm>
 #include <iterator>
@@ -95,6 +98,81 @@ void writeThemePreference(bool dark) {
     }
 }
 }
+std::wstring liveDnsDiagnostics() {
+    ULONG bufferSize = 16 * 1024;
+    std::vector<BYTE> storage(bufferSize);
+    auto* adapters = reinterpret_cast<IP_ADAPTER_ADDRESSES*>(storage.data());
+    ULONG result = GetAdaptersAddresses(AF_UNSPEC,
+        GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST,
+        nullptr, adapters, &bufferSize);
+    if (result == ERROR_BUFFER_OVERFLOW) {
+        storage.resize(bufferSize);
+        adapters = reinterpret_cast<IP_ADAPTER_ADDRESSES*>(storage.data());
+        result = GetAdaptersAddresses(AF_UNSPEC,
+            GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST,
+            nullptr, adapters, &bufferSize);
+    }
+
+    if (result != NO_ERROR) {
+        return L"Could not enumerate live network adapters (Windows error " +
+            std::to_wstring(result) + L").";
+    }
+
+    std::wstring report;
+    bool foundExpectedResolver = false;
+    size_t shownAdapters = 0;
+    for (auto* adapter = adapters; adapter && shownAdapters < 6; adapter = adapter->Next) {
+        if (adapter->OperStatus != IfOperStatusUp ||
+            adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+
+        ++shownAdapters;
+        report += L"\n" + std::wstring(adapter->FriendlyName ? adapter->FriendlyName : L"Network adapter") + L":";
+        bool hasDns = false;
+        for (auto* dns = adapter->FirstDnsServerAddress; dns; dns = dns->Next) {
+            if (!dns->Address.lpSockaddr) continue;
+            wchar_t address[INET6_ADDRSTRLEN]{};
+            bool expected = false;
+            const auto* socketAddress = dns->Address.lpSockaddr;
+            if (socketAddress->sa_family == AF_INET) {
+                const auto* ipv4 = reinterpret_cast<const SOCKADDR_IN*>(socketAddress);
+                if (!InetNtopW(AF_INET, const_cast<IN_ADDR*>(&ipv4->sin_addr),
+                               address, static_cast<DWORD>(std::size(address)))) continue;
+                expected = _wcsicmp(address, L"185.228.168.168") == 0 ||
+                           _wcsicmp(address, L"185.228.169.168") == 0;
+            } else if (socketAddress->sa_family == AF_INET6) {
+                const auto* ipv6 = reinterpret_cast<const SOCKADDR_IN6*>(socketAddress);
+                if (!InetNtopW(AF_INET6, const_cast<IN6_ADDR*>(&ipv6->sin6_addr),
+                               address, static_cast<DWORD>(std::size(address)))) continue;
+                expected = _wcsicmp(address, L"2a0d:2a00:1::") == 0 ||
+                           _wcsicmp(address, L"2a0d:2a00:2::") == 0;
+            } else {
+                continue;
+            }
+            hasDns = true;
+            foundExpectedResolver = foundExpectedResolver || expected;
+            report += L"\n  " + std::wstring(address) +
+                (expected ? L"  [Himaya filtering resolver]" : L"  [Other DNS resolver]");
+        }
+        if (!hasDns) report += L"\n  No DNS server was reported for this adapter.";
+    }
+
+    if (shownAdapters == 0) report = L"\nNo active non-loopback network adapter was found.";
+    report += L"\n\nConfigured resolver check: ";
+    report += foundExpectedResolver
+        ? L"At least one CleanBrowsing Adult resolver is present."
+        : L"No configured CleanBrowsing Adult resolver was found on active adapters.";
+
+    DNS_RECORD* records = nullptr;
+    const DNS_STATUS queryStatus = DnsQuery_W(L"example.com", DNS_TYPE_A,
+        DNS_QUERY_BYPASS_CACHE, nullptr, &records, nullptr);
+    if (records) DnsRecordListFree(records, DnsFreeRecordList);
+    report += L"\nDNS lookup probe (example.com): ";
+    report += queryStatus == ERROR_SUCCESS
+        ? L"successful using the Windows resolver configuration."
+        : L"failed (DNS status " + std::to_wstring(queryStatus) + L").";
+    return report;
+}
+
 
 MainWindow::MainWindow(HINSTANCE instance) : instance_(instance) {}
 
@@ -441,10 +519,12 @@ void MainWindow::refreshHealth() {
     const auto folders=databaseReady?store_.load(L"paths"):std::vector<himaya::Entry>{};
     const bool dnsConfigured=databaseReady && store_.getSetting(L"adult_dns_enabled",L"0")==L"1";
     const auto events=databaseReady?store_.loadRecentEvents(1):std::vector<himaya::Event>{};
+    const auto liveDns = liveDnsDiagnostics();
 
     std::wstring report=L"PROTECTION SERVICE\n"+serviceState+
         L"\n\nLOCAL DATABASE\n"+(databaseReady?L"Available":L"Unavailable — "+store_.lastError())+
         L"\n\nADULT DNS SETTING\n"+(dnsConfigured?L"Enabled in saved configuration":L"Disabled in saved configuration")+
+        L"\n\nLIVE NETWORK DNS DIAGNOSTICS\n"+liveDns+
         L"\n\nSAVED BLOCKING RULES\nApplications: "+std::to_wstring(apps.size())+
         L"\nWebsites: "+std::to_wstring(sites.size())+
         L"\nProtected folders: "+std::to_wstring(folders.size())+
