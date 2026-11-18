@@ -1,6 +1,5 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <iptypes.h>
 #include <iphlpapi.h>
 #include "MainWindow.h"
 #include <winsvc.h>
