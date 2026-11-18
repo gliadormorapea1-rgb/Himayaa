@@ -87,8 +87,7 @@ jobs:
             throw "Rollback must preserve an unvalidated legacy backup."
           }
           if ($scriptText.IndexOf("function Test-DnsResolverGroup") -lt 0 -or
-              $scriptText.IndexOf("Resolve-DnsName -Name 'example.com' -Server $server -Type A -DnsOnly") -lt 0 -and
-              $scriptText.IndexOf("Resolve-DnsName -Name 'example.com' -Server ${server} -Type A -DnsOnly") -lt 0) {
+              $scriptText.IndexOf('Resolve-DnsName -Name ''example.com'' -Server ${server} -Type A -DnsOnly') -lt 0) {
             throw "Live DNS resolver health verification is missing."
           }
           if ($scriptText.IndexOf("function Ensure-HimayaFirewallRule") -lt 0 -or
