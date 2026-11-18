@@ -44,6 +44,7 @@ if(MSVC)
 endif()
 
 add_executable(Himaya WIN32 App/main.cpp App/MainWindow.cpp)
+target_compile_definitions(Himaya PRIVATE WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
 target_link_libraries(Himaya PRIVATE HimayaCore comctl32 comdlg32 dwmapi uxtheme iphlpapi ws2_32)
 if(MSVC)
   target_link_options(Himaya PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
