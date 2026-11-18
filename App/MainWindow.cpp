@@ -9,6 +9,7 @@
 #include <dwmapi.h>
 #include <uxtheme.h>
 #include <shlwapi.h>
+#include <iptypes.h>
 #include <iphlpapi.h>
 #include <ws2tcpip.h>
 #include <string>
